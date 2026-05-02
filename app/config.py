@@ -1,0 +1,27 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    gcp_project: str = ""
+    region: str = "us-central1"
+
+    # Gemini — operator-configurable only; not exposed to end users.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+
+    # OAuth 2.0 credentials (from Google Cloud Console)
+    oauth_client_id: str = ""
+    oauth_client_secret: str = ""
+    # Public Cloud Run URL; used as OAuth redirect base and in card links.
+    app_base_url: str = ""
+
+    # Workspace Add-on JWT verification.
+    # addon_audience: the Cloud Run URL Google puts in the JWT "aud" claim.
+    addon_audience: str = ""
+    # Disable for local development only — must be true in production.
+    verify_addon_tokens: bool = True
+
+
+settings = Settings()
