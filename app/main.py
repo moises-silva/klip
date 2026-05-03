@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -64,7 +65,7 @@ async def events(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     event_type = _detect_event_type(body)
-    logger.info("Event received type=%s", event_type)
+    logger.info("Event received type=%s body=%s", event_type, json.dumps(body))
 
     handler = _EVENT_HANDLERS.get(event_type)
     if handler is None:
@@ -72,6 +73,7 @@ async def events(request: Request):
         return JSONResponse({})
 
     result = await handler(body)
+    logger.info("Sending response: %s", json.dumps(result))
     return JSONResponse(result)
 
 

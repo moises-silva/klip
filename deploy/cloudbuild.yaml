@@ -2,24 +2,18 @@ steps:
   # Pull the previous image to use as a build cache (fails silently on first build)
   - name: gcr.io/cloud-builders/docker
     entrypoint: bash
-    args: ['-c', 'docker pull $_IMAGE:latest || true']
+    args: ['-c', 'docker pull $_IMAGE || true']
 
   # Build with cache-from so unchanged layers (e.g. pip install) are reused
   - name: gcr.io/cloud-builders/docker
     args:
       - build
-      - --cache-from=$_IMAGE:latest
-      - --build-arg=BUILDKIT_INLINE_CACHE=1
-      - -t=$_IMAGE:latest
+      - --cache-from=$_IMAGE
+      - -t=$_IMAGE
       - .
-    env:
-      - DOCKER_BUILDKIT=1
 
   - name: gcr.io/cloud-builders/docker
-    args: [push, '$_IMAGE:latest']
-
-substitutions:
-  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/klip/app
+    args: [push, '$_IMAGE']
 
 options:
   logging: CLOUD_LOGGING_ONLY
