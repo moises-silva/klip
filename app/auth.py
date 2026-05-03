@@ -75,14 +75,16 @@ def _decode_state(state: str) -> dict:
     return json.loads(base64.urlsafe_b64decode(state.encode()).decode())
 
 
-async def save_user_context(user_id: str, space_name: str, config_redirect_uri: str) -> None:
-    """Persist the user's DM space and configCompleteRedirectUri before OAuth."""
+async def save_user_context(
+    user_id: str, space_name: str, config_redirect_uri: str, email: str = ""
+) -> None:
+    """Persist the user's DM space, email, and configCompleteRedirectUri before OAuth."""
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {"space_name": space_name, "config_redirect_uri": config_redirect_uri},
-        merge=True,
-    )
-    logger.info("Saved context for user=%s space=%s", user_id, space_name)
+    data = {"space_name": space_name, "config_redirect_uri": config_redirect_uri}
+    if email:
+        data["email"] = email
+    await db.collection("users").document(_doc_id(user_id)).set(data, merge=True)
+    logger.info("Saved context for user=%s space=%s email=%s", user_id, space_name, email)
 
 
 async def get_auth_url(user_id: str) -> str:

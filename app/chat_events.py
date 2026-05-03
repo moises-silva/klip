@@ -12,6 +12,9 @@ def _chat(event: dict) -> dict:
 def _user_id(event: dict) -> str:
     return _chat(event).get("user", {}).get("name", "unknown")
 
+def _user_email(event: dict) -> str:
+    return _chat(event).get("user", {}).get("email", "")
+
 def _message_text(event: dict) -> str:
     return _chat(event).get("messagePayload", {}).get("message", {}).get("text", "").strip()
 
@@ -36,8 +39,9 @@ async def _save_context(event: dict) -> None:
     user_id = _user_id(event)
     space = _space_name(event)
     redirect_uri = _config_redirect_uri(event)
+    email = _user_email(event)
     if space:
-        await save_user_context(user_id, space, redirect_uri)
+        await save_user_context(user_id, space, redirect_uri, email)
 
 
 async def handle_added_to_space(event: dict) -> dict:
