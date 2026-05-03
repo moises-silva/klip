@@ -4,22 +4,28 @@ Local MCP + Gemini integration test.
 
 Runs four progressive levels, stopping at first failure.
 
-Token input (tried in order):
-  1. TEST_ACCESS_TOKEN env var  — paste directly from Firestore (~1h validity)
-  2. TEST_REFRESH_TOKEN env var  — combined with OAUTH_CLIENT_ID + OAUTH_CLIENT_SECRET
-                                   from .env; script refreshes automatically
+  Level 0 — Raw HTTP probe: confirms the MCP server URL is reachable.
+  Level 1 — MCP handshake: verifies transport and protocol negotiation.
+  Level 2 — Tool discovery: lists all tools the Chat MCP server exposes.
+  Level 3 — Single tool call: calls one tool directly (requires OAuth token).
+  Level 4 — Full Gemini loop: end-to-end GeminiAgent.respond() via Vertex AI.
 
-Usage:
-  # from the repo root
-  export TEST_ACCESS_TOKEN="ya29...."
-  python3 scripts/test_mcp.py
+Prerequisites
+-------------
+Levels 0-2 need no credentials.
 
-  # or with refresh token (reads client creds from .env)
-  export TEST_REFRESH_TOKEN="1//..."
-  python3 scripts/test_mcp.py
+Levels 3-4 need an OAuth access token for the user:
+  export TEST_ACCESS_TOKEN="ya29...."      # paste from Firestore (~1h validity)
+  export TEST_REFRESH_TOKEN="1//..."       # auto-refreshes using creds from .env
 
-  # run only up to a specific level (1-4)
-  python3 scripts/test_mcp.py --level 2
+Level 4 additionally needs Google ADC set up for Vertex AI access:
+  gcloud auth application-default login
+  # then verify with: gcloud auth application-default print-access-token
+
+Usage
+-----
+  python3 scripts/test_mcp.py              # run all levels
+  python3 scripts/test_mcp.py --level 2   # run up to level 2 only
 """
 
 import argparse
@@ -99,6 +105,36 @@ def resolve_access_token() -> str:
     print("done.")
     print(f"  Access token: {creds.token[:20]}…")
     return creds.token
+
+
+def check_adc() -> None:
+    """Verify that Application Default Credentials are available for Vertex AI.
+
+    Exits with a helpful message if not, rather than failing deep inside the
+    Gemini SDK with a cryptic error.
+    """
+    import google.auth
+    import google.auth.exceptions
+
+    try:
+        creds, project = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        print(f"  ADC OK — project={project or '(unknown)'} type={type(creds).__name__}")
+    except google.auth.exceptions.DefaultCredentialsError:
+        print(
+            f"\n{FAIL}: No Application Default Credentials found.\n"
+            "\n"
+            "Level 4 calls Vertex AI, which requires ADC. Run:\n"
+            "\n"
+            "    gcloud auth application-default login\n"
+            "\n"
+            "Then re-run this script. To verify credentials afterwards:\n"
+            "\n"
+            "    gcloud auth application-default print-access-token\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 # ── test levels ───────────────────────────────────────────────────────────────
@@ -265,9 +301,8 @@ async def level4_gemini_loop(access_token: str) -> None:
     from app.gemini import GeminiAgent
     from app.config import settings
 
-    if not settings.gemini_api_key or settings.gemini_api_key == "PLACEHOLDER":
-        print(f"  Skipped — GEMINI_API_KEY not set in .env")
-        return
+    print("  Checking ADC for Vertex AI …")
+    check_adc()
 
     prompt = "List the Google Chat spaces I'm a member of."
     print(f"  Prompt: {prompt!r}")

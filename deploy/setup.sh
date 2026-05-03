@@ -26,6 +26,7 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   iam.googleapis.com \
+  aiplatform.googleapis.com \
   --project="${PROJECT_ID}"
 
 # ------------------------------------------------------------------
@@ -45,7 +46,8 @@ fi
 echo "==> Granting IAM roles..."
 for ROLE in \
   roles/datastore.user \
-  roles/secretmanager.secretAccessor; do
+  roles/secretmanager.secretAccessor \
+  roles/aiplatform.user; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="${ROLE}" \
@@ -86,7 +88,7 @@ fi
 # Secret Manager — placeholder secrets (must be updated before deploy)
 # ------------------------------------------------------------------
 echo "==> Secret Manager secrets..."
-for SECRET in gemini-api-key oauth-client-id oauth-client-secret; do
+for SECRET in oauth-client-id oauth-client-secret; do
   if ! gcloud secrets describe "${SECRET}" --project="${PROJECT_ID}" &>/dev/null; then
     printf 'PLACEHOLDER' | gcloud secrets create "${SECRET}" \
       --data-file=- \
@@ -104,7 +106,6 @@ echo ""
 echo "Next: update secrets, then deploy."
 echo ""
 echo "  Update secrets:"
-echo "    printf 'YOUR_KEY' | gcloud secrets versions add gemini-api-key --data-file=- --project=${PROJECT_ID}"
 echo "    printf 'YOUR_ID'  | gcloud secrets versions add oauth-client-id --data-file=- --project=${PROJECT_ID}"
 echo "    printf 'YOUR_SEC' | gcloud secrets versions add oauth-client-secret --data-file=- --project=${PROJECT_ID}"
 echo ""

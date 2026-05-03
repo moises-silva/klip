@@ -26,8 +26,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform=managed \
   --allow-unauthenticated \
   --service-account="${SA_EMAIL}" \
-  --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,OAUTH_CLIENT_ID=oauth-client-id:latest,OAUTH_CLIENT_SECRET=oauth-client-secret:latest" \
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID},REGION=${REGION},GEMINI_MODEL=gemini-2.0-flash,VERIFY_ADDON_TOKENS=true" \
+  --set-secrets="OAUTH_CLIENT_ID=oauth-client-id:latest,OAUTH_CLIENT_SECRET=oauth-client-secret:latest" \
+  --set-env-vars="GCP_PROJECT=${PROJECT_ID},REGION=${REGION},GEMINI_MODEL=gemini-2.5-flash,VERIFY_ADDON_TOKENS=true" \
   --project="${PROJECT_ID}"
 
 # Retrieve the stable Cloud Run URL and bake it back into the service as

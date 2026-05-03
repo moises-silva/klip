@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     region: str = "us-central1"
 
     # Gemini — operator-configurable only; not exposed to end users.
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    # Uses Vertex AI (ADC via service account); no API key required.
+    gemini_model: str = "gemini-2.5-flash"
 
     # OAuth 2.0 credentials (from Google Cloud Console)
     oauth_client_id: str = ""
