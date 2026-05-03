@@ -1,0 +1,16 @@
+{
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/contacts.readonly",
+    "https://www.googleapis.com/auth/directory.readonly"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Klip",
+      "logoUrl": "https://storage.googleapis.com/klip-static/avatar.png",
+      "useLocaleFromApp": true
+    }
+  }
+}

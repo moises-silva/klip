@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Workspace Add-on JWT verification.
     # addon_audience: the Cloud Run URL Google puts in the JWT "aud" claim.
     addon_audience: str = ""
+    # addon_token_issuer: the service account Google signs tokens with.
+    # Format: service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com
+    addon_token_issuer: str = ""
     # Disable for local development only — must be true in production.
     verify_addon_tokens: bool = True
 

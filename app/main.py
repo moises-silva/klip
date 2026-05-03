@@ -55,7 +55,7 @@ async def events(request: Request):
         token = extract_bearer_token(auth_header)
         if not token:
             raise HTTPException(status_code=401, detail="Missing bearer token")
-        if not verify_addon_token(token, settings.addon_audience):
+        if not verify_addon_token(token, settings.addon_audience, settings.addon_token_issuer):
             raise HTTPException(status_code=401, detail="Invalid token")
 
     try:
@@ -63,13 +63,30 @@ async def events(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    event_type = body.get("type", "")
+    event_type = _detect_event_type(body)
     logger.info("Event received type=%s", event_type)
 
     handler = _EVENT_HANDLERS.get(event_type)
     if handler is None:
-        logger.warning("Unhandled event type: %s", event_type)
+        logger.warning("Unhandled event type: %s | body: %s", event_type, body)
         return JSONResponse({})
 
     result = await handler(body)
     return JSONResponse(result)
+
+
+def _detect_event_type(body: dict) -> str:
+    """
+    Workspace Add-ons events don't have a top-level 'type' field.
+    The event type is inferred from which payload key is present in body['chat'].
+    """
+    chat = body.get("chat", {})
+    if "messagePayload" in chat:
+        return "MESSAGE"
+    if "addedToSpacePayload" in chat:
+        return "ADDED_TO_SPACE"
+    if "removedFromSpacePayload" in chat:
+        return "REMOVED_FROM_SPACE"
+    if "buttonClickedPayload" in chat:
+        return "CARD_CLICKED"
+    return ""

@@ -5,18 +5,15 @@ import google.oauth2.id_token
 
 logger = logging.getLogger(__name__)
 
-# Service account Google uses when calling Workspace Add-on HTTP endpoints.
-GOOGLE_CHAT_ISSUER = "chat@system.gserviceaccount.com"
-
 _transport_request = google.auth.transport.requests.Request()
 
 
-def verify_addon_token(bearer_token: str, audience: str) -> bool:
+def verify_addon_token(bearer_token: str, audience: str, expected_issuer: str) -> bool:
     """
     Verify a Google-signed JWT sent by the Workspace Add-ons framework.
 
-    Google signs each incoming request with a JWT whose issuer is the Chat
-    service account and whose audience is the add-on's Cloud Run URL.
+    The issuer is the project-specific gsuiteaddons service account:
+    service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com
     """
     try:
         info = google.oauth2.id_token.verify_token(
@@ -25,7 +22,7 @@ def verify_addon_token(bearer_token: str, audience: str) -> bool:
             audience=audience,
         )
         issuer = info.get("email", "")
-        if issuer != GOOGLE_CHAT_ISSUER:
+        if issuer != expected_issuer:
             logger.warning("Unexpected token issuer: %s", issuer)
             return False
         return True

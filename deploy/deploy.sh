@@ -9,9 +9,14 @@ SERVICE_NAME="klip"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/app:latest"
 
+# Derive the project number (needed for the gsuiteaddons token issuer)
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)")
+ADDON_TOKEN_ISSUER="service-${PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com"
+
 echo "==> Building image: ${IMAGE}"
 gcloud builds submit \
-  --tag="${IMAGE}" \
+  --config=deploy/cloudbuild.yaml \
+  --substitutions="_IMAGE=${IMAGE}" \
   --project="${PROJECT_ID}"
 
 echo "==> Deploying to Cloud Run..."
@@ -32,11 +37,11 @@ URL=$(gcloud run services describe "${SERVICE_NAME}" \
   --project="${PROJECT_ID}" \
   --format="value(status.url)")
 
-echo "==> Setting APP_BASE_URL and ADDON_AUDIENCE to: ${URL}"
+echo "==> Setting APP_BASE_URL, ADDON_AUDIENCE, and ADDON_TOKEN_ISSUER..."
 gcloud run services update "${SERVICE_NAME}" \
   --region="${REGION}" \
   --project="${PROJECT_ID}" \
-  --update-env-vars="APP_BASE_URL=${URL},ADDON_AUDIENCE=${URL}"
+  --update-env-vars="APP_BASE_URL=${URL},ADDON_AUDIENCE=${URL}/events,ADDON_TOKEN_ISSUER=${ADDON_TOKEN_ISSUER}"
 
 echo ""
 echo "==> Deployment complete!"

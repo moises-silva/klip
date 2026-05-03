@@ -19,6 +19,7 @@ echo "==> Enabling GCP APIs..."
 gcloud services enable \
   chat.googleapis.com \
   people.googleapis.com \
+  gsuiteaddons.googleapis.com \
   firestore.googleapis.com \
   secretmanager.googleapis.com \
   run.googleapis.com \
