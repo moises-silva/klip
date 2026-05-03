@@ -13,3 +13,13 @@ and enables `uvicorn --reload` + debugger during development.
 - Local `.env`: set `VERIFY_ADDON_TOKENS=false`, `APP_BASE_URL=https://your-tunnel`
 - ADC already works via `gcloud auth application-default login`
 - Firestore connects to the real GCP instance (or Firestore emulator for full isolation)
+
+## Multi-turn conversation history
+
+Each message is currently an independent prompt — no memory of prior turns in the 1:1 conversation.
+
+**How it would work:**
+- Store conversation history in Firestore as a list of `{role, text}` turns per user
+- Load history at the start of `respond()` and prepend to `contents`
+- Append the new user message and model response after each turn
+- Cap history length to avoid unbounded context growth (e.g. last N turns or token budget)

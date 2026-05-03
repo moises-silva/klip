@@ -5,6 +5,7 @@ set -euo pipefail
 
 PROJECT_ID="${GCP_PROJECT:?Set GCP_PROJECT before running this script}"
 REGION="${REGION:-us-central1}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
 SERVICE_NAME="klip"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${SERVICE_NAME}/app:latest"
@@ -27,7 +28,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --allow-unauthenticated \
   --service-account="${SA_EMAIL}" \
   --set-secrets="OAUTH_CLIENT_ID=oauth-client-id:latest,OAUTH_CLIENT_SECRET=oauth-client-secret:latest" \
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID},REGION=${REGION},GEMINI_MODEL=gemini-2.5-flash,VERIFY_ADDON_TOKENS=true" \
+  --set-env-vars="GCP_PROJECT=${PROJECT_ID},REGION=${REGION},GEMINI_MODEL=${GEMINI_MODEL},VERIFY_ADDON_TOKENS=true" \
   --project="${PROJECT_ID}"
 
 # Retrieve the stable Cloud Run URL and bake it back into the service as
