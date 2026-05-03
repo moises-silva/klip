@@ -1,7 +1,8 @@
 import logging
 
-from .auth import get_auth_url, is_authorized, save_user_context
+from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user_context
 from .cards import text_response, welcome_card
+from .gemini import GeminiAgent
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,14 @@ async def handle_message(event: dict) -> dict:
         auth_url = await get_auth_url(user_id)
         return welcome_card(auth_url)
 
-    # TODO Phase 4: route to GeminiAgent.respond(text)
-    return text_response("AI responses coming soon! (Phase 4)")
+    access_token = await get_fresh_access_token(user_id)
+    if not access_token:
+        auth_url = await get_auth_url(user_id)
+        return welcome_card(auth_url)
+
+    agent = GeminiAgent(user_id, access_token)
+    result = await agent.respond(text)
+    return text_response(result)
 
 
 async def handle_card_clicked(event: dict) -> dict:

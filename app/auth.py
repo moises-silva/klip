@@ -5,6 +5,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
+import google.auth.transport.requests
+
 import google.auth
 from google.cloud import firestore
 from google.oauth2.credentials import Credentials
@@ -144,13 +146,37 @@ async def get_credentials(user_id: str) -> Credentials | None:
     data = doc.to_dict()
     if not data.get("refresh_token"):
         return None
+    expiry = None
+    if data.get("token_expiry"):
+        try:
+            expiry = datetime.fromisoformat(data["token_expiry"])
+        except ValueError:
+            pass
     return Credentials(
         token=data.get("access_token"),
         refresh_token=data["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
         client_id=settings.oauth_client_id,
         client_secret=settings.oauth_client_secret,
+        expiry=expiry,
     )
+
+
+async def get_fresh_access_token(user_id: str) -> str | None:
+    """Return a valid access token, refreshing via the refresh token if expired."""
+    creds = await get_credentials(user_id)
+    if creds is None:
+        return None
+    if not creds.valid:
+        try:
+            request = google.auth.transport.requests.Request()
+            await asyncio.to_thread(creds.refresh, request)
+            await store_tokens(user_id, creds)
+            logger.info("Refreshed access token for user=%s", user_id)
+        except Exception as exc:
+            logger.error("Token refresh failed for user=%s: %s", user_id, exc)
+            return None
+    return creds.token
 
 
 async def _send_authorized_message(space_name: str) -> None:

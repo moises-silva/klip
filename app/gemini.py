@@ -1,16 +1,34 @@
 """
-Gemini agentic loop with MCP tool dispatch — implemented in Phase 4.
+Gemini agentic loop with MCP tool dispatch.
 
-Flow per user turn:
-  1. Build Gemini request with tool declarations from WorkspaceMcpClient.list_tools()
-  2. Send user message; Gemini may respond with one or more function_call parts.
-  3. For each function_call: dispatch via WorkspaceMcpClient.call_tool().
-  4. Feed tool results back to Gemini.
-  5. Repeat until Gemini returns a text response.
+The Gemini SDK natively supports passing an MCP ClientSession in the tools list.
+It handles tool listing, function call dispatch, and the multi-turn loop
+automatically via automatic function calling (AFC).
 """
 import logging
 
+import google.genai as genai
+from google.genai import types as genai_types
+
+from .config import settings
+from .mcp_client import workspace_mcp_session
+
 logger = logging.getLogger(__name__)
+
+_SYSTEM_INSTRUCTION = (
+    "You are Klip, a Google Workspace personal assistant. "
+    "Help the user with their Google Chat conversations and Workspace data "
+    "using the available tools. Be concise and helpful."
+)
+
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.gemini_api_key)
+    return _client
 
 
 class GeminiAgent:
@@ -25,5 +43,36 @@ class GeminiAgent:
 
     async def respond(self, user_message: str) -> str:
         """Process a user message and return the assistant's response text."""
-        # TODO Phase 4: implement the agentic loop described in the module docstring
-        raise NotImplementedError("Gemini agent not yet implemented (Phase 4)")
+        client = _get_client()
+        try:
+            async with workspace_mcp_session(self.access_token) as session:
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=user_message,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_INSTRUCTION,
+                        tools=[session],
+                        automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(
+                            disable=False,
+                            maximum_remote_calls=10,
+                        ),
+                    ),
+                )
+                logger.info("Gemini response (with MCP) for user=%s", self.user_id)
+        except Exception as exc:
+            logger.warning(
+                "MCP session failed for user=%s, falling back to no tools: %s",
+                self.user_id,
+                exc,
+            )
+            response = await client.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=user_message,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_INSTRUCTION
+                    + " Note: Workspace tools are temporarily unavailable.",
+                ),
+            )
+            logger.info("Gemini response (no tools) for user=%s", self.user_id)
+
+        return response.text or "(no response)"

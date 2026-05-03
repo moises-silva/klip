@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     addon_token_issuer: str = ""
     # Disable for local development only — must be true in production.
     verify_addon_tokens: bool = True
+    # Enable DEBUG logging for the Gemini SDK's agentic loop (noisy, for troubleshooting).
+    debug_gemini: bool = False
 
 
 settings = Settings()

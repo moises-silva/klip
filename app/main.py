@@ -23,6 +23,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+if settings.debug_gemini:
+    # Surfaces individual tool call counts and AFC decisions from the Gemini SDK.
+    # Also enables DEBUG on the MCP transport layer for request/response tracing.
+    logging.getLogger("google_genai.models").setLevel(logging.DEBUG)
+    logging.getLogger("mcp.client.streamable_http").setLevel(logging.DEBUG)
+
 _EVENT_HANDLERS = {
     "ADDED_TO_SPACE": handle_added_to_space,
     "MESSAGE": handle_message,
