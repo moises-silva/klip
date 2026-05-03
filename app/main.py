@@ -3,8 +3,8 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from .chat_events import (
     handle_added_to_space,
@@ -12,6 +12,7 @@ from .chat_events import (
     handle_message,
     handle_removed_from_space,
 )
+from .auth import handle_oauth_callback
 from .config import settings
 from .verification import extract_bearer_token, verify_addon_token
 
@@ -42,6 +43,34 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Klip", lifespan=lifespan)
+
+
+@app.get("/auth/callback")
+async def auth_callback(
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+):
+    if error:
+        logger.warning("OAuth denied: %s", error)
+        return HTMLResponse(
+            "<h2>Authorization denied</h2>"
+            "<p>You can close this tab and try again from Google Chat.</p>"
+        )
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+    try:
+        redirect_uri = await handle_oauth_callback(code, state)
+    except Exception as exc:
+        logger.error("OAuth callback failed: %s", exc)
+        raise HTTPException(status_code=400, detail="Authorization failed")
+
+    if redirect_uri:
+        return RedirectResponse(url=redirect_uri)
+    return HTMLResponse(
+        "<h2>Authorization complete!</h2>"
+        "<p>You can close this tab and return to Google Chat.</p>"
+    )
 
 
 @app.get("/health")

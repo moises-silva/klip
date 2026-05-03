@@ -3,6 +3,7 @@ uvicorn[standard]>=0.32
 pydantic-settings>=2.7
 google-auth>=2.37
 google-auth-oauthlib>=1.2
+google-api-python-client>=2.160
 google-cloud-firestore>=2.19
 google-genai>=1.16
 mcp>=1.9

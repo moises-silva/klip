@@ -1,6 +1,6 @@
 import logging
 
-from .auth import get_auth_url, is_authorized
+from .auth import get_auth_url, is_authorized, save_user_context
 from .cards import text_response, welcome_card
 
 logger = logging.getLogger(__name__)
@@ -15,13 +15,35 @@ def _user_id(event: dict) -> str:
 def _message_text(event: dict) -> str:
     return _chat(event).get("messagePayload", {}).get("message", {}).get("text", "").strip()
 
-def _space_type(event: dict) -> str:
-    return _chat(event).get("addedToSpacePayload", {}).get("space", {}).get("type", "")
+def _space_name(event: dict) -> str:
+    chat = _chat(event)
+    space = (
+        chat.get("messagePayload", {}).get("space")
+        or chat.get("addedToSpacePayload", {}).get("space", {})
+    )
+    return space.get("name", "")
+
+def _config_redirect_uri(event: dict) -> str:
+    chat = _chat(event)
+    return (
+        chat.get("messagePayload", {}).get("configCompleteRedirectUri")
+        or chat.get("addedToSpacePayload", {}).get("configCompleteRedirectUri", "")
+    )
+
+
+async def _save_context(event: dict) -> None:
+    """Persist space name and configCompleteRedirectUri for use in the OAuth callback."""
+    user_id = _user_id(event)
+    space = _space_name(event)
+    redirect_uri = _config_redirect_uri(event)
+    if space:
+        await save_user_context(user_id, space, redirect_uri)
 
 
 async def handle_added_to_space(event: dict) -> dict:
     user_id = _user_id(event)
-    logger.info("ADDED_TO_SPACE user=%s space_type=%s", user_id, _space_type(event))
+    logger.info("ADDED_TO_SPACE user=%s", user_id)
+    await _save_context(event)
     auth_url = await get_auth_url(user_id)
     return welcome_card(auth_url)
 
@@ -30,6 +52,7 @@ async def handle_message(event: dict) -> dict:
     user_id = _user_id(event)
     text = _message_text(event)
     logger.info("MESSAGE user=%s text=%.100s", user_id, text)
+    await _save_context(event)
 
     if not await is_authorized(user_id):
         auth_url = await get_auth_url(user_id)
@@ -41,10 +64,8 @@ async def handle_message(event: dict) -> dict:
 
 async def handle_card_clicked(event: dict) -> dict:
     action = _chat(event).get("buttonClickedPayload", {}).get("action", {}).get("actionMethodName", "")
-    user_id = _user_id(event)
-    logger.info("CARD_CLICKED action=%s user=%s", action, user_id)
-    # TODO Phase 3: handle OAuth-related button actions
-    return text_response("")
+    logger.info("CARD_CLICKED action=%s user=%s", action, _user_id(event))
+    return {}
 
 
 async def handle_removed_from_space(event: dict) -> dict:
