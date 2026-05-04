@@ -1,6 +1,4 @@
-# Klip
-
-<img src="https://storage.googleapis.com/klip-static/avatar.png" alt="Klip" width="96" />
+<h1><img src="https://storage.googleapis.com/klip-static/avatar_transparent.png" alt="Klip" width="60" valign="middle" />Klip</h1>
 
 Klip is an open-source Google Chat App that acts as a personal Workspace assistant powered by Gemini. Users interact with it via Google Chat DMs. It reads and searches their Workspace data through the Google Chat MCP server and responds using a Gemini model running on Vertex AI.
 
