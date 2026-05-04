@@ -152,22 +152,13 @@ gcloud projects describe your-project-id --format="value(projectNumber)"
 
 Vertex AI and Firestore use ADC for authentication — no service account key file needed.
 
-If your VPS has no browser, authenticate on a machine that does (e.g. your laptop) and copy the credentials over:
-
-**On your local machine:**
-
-```bash
-gcloud auth application-default login
-scp ~/.config/gcloud/application_default_credentials.json user@yourserver:~/.config/gcloud/application_default_credentials.json
-```
-
-**Or directly on the VPS** using the no-browser flow:
+On the VPS, run:
 
 ```bash
 gcloud auth application-default login --no-browser
 ```
 
-It prints a URL — open it in any browser, authenticate, and paste the authorization code back into the terminal.
+It prints a `gcloud auth application-default login` command to run on a machine that has a browser (e.g. your laptop). Running that command opens a browser window, and after you authenticate it prints an authorization URL. Copy that URL and paste it back into the VPS terminal to complete the process. Credentials are saved to `~/.config/gcloud/application_default_credentials.json`.
 
 ### 5. Grant your personal account Vertex AI access
 
