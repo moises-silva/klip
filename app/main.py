@@ -1,5 +1,6 @@
 import json
 import logging
+import signal
 import sys
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,10 @@ from .chat_events import (
 from .auth import handle_oauth_callback
 from .config import settings
 from .verification import extract_bearer_token, verify_addon_token
+
+# Prevent BrokenPipeError noise when stdout is closed during shutdown (e.g. Ctrl+C).
+if hasattr(signal, "SIGPIPE"):
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 logging.basicConfig(
     stream=sys.stdout,
