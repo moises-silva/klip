@@ -1,7 +1,10 @@
+import asyncio
 import logging
 
 from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user_context
 from .cards import text_response, welcome_card
+from .chat_api import post_message
+from .config import settings
 from .gemini import GeminiAgent
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,22 @@ async def handle_added_to_space(event: dict) -> dict:
     return welcome_card(auth_url)
 
 
+async def _run_and_reply(agent: GeminiAgent, text: str, space: str, user_id: str) -> None:
+    try:
+        async with asyncio.timeout(settings.gemini_timeout):
+            result = await agent.respond(text)
+    except TimeoutError:
+        logger.warning("Gemini timed out for user=%s after %ds", user_id, settings.gemini_timeout)
+        result = "Sorry, that request took too long. Please try a simpler query."
+    except Exception as exc:
+        logger.error("Background task failed for user=%s: %s", user_id, exc, exc_info=True)
+        result = "Sorry, something went wrong. Please try again."
+    try:
+        await post_message(space, result)
+    except Exception as exc:
+        logger.error("Failed to post async reply to space=%s: %s", space, exc)
+
+
 async def handle_message(event: dict) -> dict:
     user_id = _user_id(event)
     text = _message_text(event)
@@ -68,9 +87,10 @@ async def handle_message(event: dict) -> dict:
         auth_url = await get_auth_url(user_id)
         return welcome_card(auth_url)
 
+    space = _space_name(event)
     agent = GeminiAgent(user_id, access_token)
-    result = await agent.respond(text)
-    return text_response(result)
+    asyncio.create_task(_run_and_reply(agent, text, space, user_id))
+    return text_response("On it...")
 
 
 async def handle_card_clicked(event: dict) -> dict:

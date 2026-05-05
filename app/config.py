@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     debug_gemini: bool = False
     # Log full HTTP request/response (headers + body) for MCP calls (very noisy).
     debug_mcp_http: bool = False
+    # Seconds before the Gemini agentic loop is cancelled and an error is sent.
+    gemini_timeout: int = 60
 
 
 settings = Settings()
