@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     verify_addon_tokens: bool = True
     # Enable DEBUG logging for the Gemini SDK's agentic loop (noisy, for troubleshooting).
     debug_gemini: bool = False
+    # Log full HTTP request/response (headers + body) for MCP calls (very noisy).
+    debug_mcp_http: bool = False
 
 
 settings = Settings()

@@ -73,7 +73,7 @@ class GeminiAgent:
         """Process a user message and return the assistant's response text."""
         try:
             client = _get_client()
-            async with workspace_mcp_session(self.access_token) as session:
+            async with workspace_mcp_session(self.access_token, debug_http=settings.debug_mcp_http) as session:
                 tools_result = await session.list_tools()
                 gemini_tools = _mcp_tools_to_gemini(tools_result.tools)
                 logger.info(
@@ -153,6 +153,7 @@ class GeminiAgent:
                 "MCP session failed for user=%s, falling back to no tools: %s",
                 self.user_id,
                 exc,
+                exc_info=True,
             )
             try:
                 response = await client.aio.models.generate_content(

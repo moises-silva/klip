@@ -33,6 +33,11 @@ if settings.debug_gemini:
     # Also enables DEBUG on the MCP transport layer for request/response tracing.
     logging.getLogger("google_genai.models").setLevel(logging.DEBUG)
     logging.getLogger("mcp.client.streamable_http").setLevel(logging.DEBUG)
+    logging.getLogger("app.gemini").setLevel(logging.DEBUG)
+
+if settings.debug_mcp_http:
+    # Log full HTTP request/response (headers + body) for every MCP call.
+    logging.getLogger("app.mcp_client").setLevel(logging.DEBUG)
 
 _EVENT_HANDLERS = {
     "ADDED_TO_SPACE": handle_added_to_space,
