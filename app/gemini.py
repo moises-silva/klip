@@ -18,6 +18,29 @@ from .mcp_client import workspace_mcp_session
 
 logger = logging.getLogger(__name__)
 
+
+class InsufficientScopesError(Exception):
+    """Raised when an MCP tool call fails because the user's OAuth token lacks a required scope."""
+    pass
+
+
+def _is_scope_error(error_text: str) -> bool:
+    """Return True if the error text indicates a missing OAuth scope."""
+    return "googleapis.com/auth/" in error_text
+
+
+def _find_scope_error(exc: BaseException) -> InsufficientScopesError | None:
+    """Recursively unwrap ExceptionGroups to find an InsufficientScopesError."""
+    if isinstance(exc, InsufficientScopesError):
+        return exc
+    if isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            found = _find_scope_error(sub)
+            if found:
+                return found
+    return None
+
+
 _SYSTEM_INSTRUCTION = (
     "You are Klip, a Google Workspace personal assistant. "
     "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
@@ -127,12 +150,17 @@ class GeminiAgent:
                         try:
                             result = await session.call_tool(fc.name, arguments=args)
                             if result.isError:
-                                logger.warning("Tool %s returned isError: %s", fc.name, result.content)
-                                tool_response = {"error": str(result.content)}
+                                error_text = str(result.content)
+                                logger.warning("Tool %s returned isError: %s", fc.name, error_text)
+                                if _is_scope_error(error_text):
+                                    raise InsufficientScopesError(error_text)
+                                tool_response = {"error": error_text}
                             else:
                                 logger.info("Tool %s succeeded", fc.name)
                                 tool_response = {"result": str(result.content)}
                         except Exception as exc:
+                            if isinstance(exc, InsufficientScopesError):
+                                raise
                             logger.error("Tool %s raised exception: %s", fc.name, exc)
                             tool_response = {"error": str(exc)}
 
@@ -149,6 +177,9 @@ class GeminiAgent:
                     logger.warning("Reached max tool rounds (%d) for user=%s", _MAX_TOOL_ROUNDS, self.user_id)
 
         except BaseException as exc:
+            scope_error = _find_scope_error(exc)
+            if scope_error:
+                raise scope_error
             logger.warning(
                 "MCP session failed for user=%s, falling back to no tools: %s",
                 self.user_id,

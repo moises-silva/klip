@@ -5,7 +5,7 @@ from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user
 from .cards import text_response, welcome_card
 from .chat_api import post_message
 from .config import settings
-from .gemini import GeminiAgent
+from .gemini import GeminiAgent, InsufficientScopesError
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,13 @@ async def _run_and_reply(agent: GeminiAgent, text: str, space: str, user_id: str
     try:
         async with asyncio.timeout(settings.gemini_timeout):
             result = await agent.respond(text)
+    except InsufficientScopesError:
+        logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
+        auth_url = await get_auth_url(user_id)
+        result = (
+            "I need additional permissions to complete this request. "
+            f"Please re-authorize me: <{auth_url}|Click here to re-authorize>"
+        )
     except TimeoutError:
         logger.warning("Gemini timed out for user=%s after %ds", user_id, settings.gemini_timeout)
         result = "Sorry, that request took too long. Please try a simpler query."
