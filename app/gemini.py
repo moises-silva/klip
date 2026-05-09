@@ -14,7 +14,7 @@ import google.genai as genai
 from google.genai import types as genai_types
 
 from .config import settings
-from .mcp_client import workspace_mcp_session
+from .mcp_client import CHAT_MCP_URL, PEOPLE_MCP_URL, workspace_mcp_session
 
 logger = logging.getLogger(__name__)
 
@@ -96,85 +96,92 @@ class GeminiAgent:
         """Process a user message and return the assistant's response text."""
         try:
             client = _get_client()
-            async with workspace_mcp_session(self.access_token, debug_http=settings.debug_mcp_http) as session:
-                tools_result = await session.list_tools()
-                gemini_tools = _mcp_tools_to_gemini(tools_result.tools)
-                logger.info(
-                    "MCP tools available for user=%s: %s",
-                    self.user_id,
-                    [d.name for d in gemini_tools[0].function_declarations],
-                )
-
-                contents: list = [user_message]
-                response = None
-
-                for round_num in range(1, _MAX_TOOL_ROUNDS + 1):
-                    response = await client.aio.models.generate_content(
-                        model=settings.gemini_model,
-                        contents=contents,
-                        config=genai_types.GenerateContentConfig(
-                            system_instruction=_SYSTEM_INSTRUCTION,
-                            tools=gemini_tools,
-                        ),
-                    )
-
-                    candidate = response.candidates[0] if response.candidates else None
-                    if not candidate or not candidate.content or not candidate.content.parts:
-                        break
-
-                    function_calls = [
-                        p.function_call
-                        for p in candidate.content.parts
-                        if p.function_call
-                    ]
-
-                    if not function_calls:
-                        logger.info("Gemini gave text response after %d round(s)", round_num)
-                        break
-
+            dbg = settings.debug_mcp_http
+            async with workspace_mcp_session(self.access_token, url=CHAT_MCP_URL, debug_http=dbg) as chat_session:
+                async with workspace_mcp_session(self.access_token, url=PEOPLE_MCP_URL, debug_http=dbg) as people_session:
+                    chat_tools = (await chat_session.list_tools()).tools
+                    people_tools = (await people_session.list_tools()).tools
+                    all_tools = chat_tools + people_tools
+                    tool_session: dict = {t.name: chat_session for t in chat_tools}
+                    tool_session.update({t.name: people_session for t in people_tools})
+                    gemini_tools = _mcp_tools_to_gemini(all_tools)
                     logger.info(
-                        "Round %d: Gemini requested %d tool call(s): %s",
-                        round_num,
-                        len(function_calls),
-                        [fc.name for fc in function_calls],
+                        "MCP tools available for user=%s: %s",
+                        self.user_id,
+                        [d.name for d in gemini_tools[0].function_declarations],
                     )
 
-                    # Append model turn to history
-                    contents.append(candidate.content)
+                    contents: list = [user_message]
+                    response = None
 
-                    # Dispatch each tool call and collect responses
-                    response_parts = []
-                    for fc in function_calls:
-                        args = dict(fc.args) if fc.args else {}
-                        logger.info("Calling MCP tool=%s args=%s", fc.name, args)
-                        try:
-                            result = await session.call_tool(fc.name, arguments=args)
-                            if result.isError:
-                                error_text = str(result.content)
-                                logger.warning("Tool %s returned isError: %s", fc.name, error_text)
-                                if _is_scope_error(error_text):
-                                    raise InsufficientScopesError(error_text)
-                                tool_response = {"error": error_text}
-                            else:
-                                logger.info("Tool %s succeeded", fc.name)
-                                tool_response = {"result": str(result.content)}
-                        except Exception as exc:
-                            if isinstance(exc, InsufficientScopesError):
-                                raise
-                            logger.error("Tool %s raised exception: %s", fc.name, exc)
-                            tool_response = {"error": str(exc)}
-
-                        response_parts.append(
-                            genai_types.Part.from_function_response(
-                                name=fc.name,
-                                response=tool_response,
-                            )
+                    for round_num in range(1, _MAX_TOOL_ROUNDS + 1):
+                        response = await client.aio.models.generate_content(
+                            model=settings.gemini_model,
+                            contents=contents,
+                            config=genai_types.GenerateContentConfig(
+                                system_instruction=_SYSTEM_INSTRUCTION,
+                                tools=gemini_tools,
+                            ),
                         )
 
-                    contents.append(genai_types.Content(role="user", parts=response_parts))
+                        candidate = response.candidates[0] if response.candidates else None
+                        if not candidate or not candidate.content or not candidate.content.parts:
+                            break
 
-                else:
-                    logger.warning("Reached max tool rounds (%d) for user=%s", _MAX_TOOL_ROUNDS, self.user_id)
+                        function_calls = [
+                            p.function_call
+                            for p in candidate.content.parts
+                            if p.function_call
+                        ]
+
+                        if not function_calls:
+                            logger.info("Gemini gave text response after %d round(s)", round_num)
+                            break
+
+                        logger.info(
+                            "Round %d: Gemini requested %d tool call(s): %s",
+                            round_num,
+                            len(function_calls),
+                            [fc.name for fc in function_calls],
+                        )
+
+                        # Append model turn to history
+                        contents.append(candidate.content)
+
+                        # Dispatch each tool call to the session that owns it
+                        response_parts = []
+                        for fc in function_calls:
+                            args = dict(fc.args) if fc.args else {}
+                            logger.info("Calling MCP tool=%s args=%s", fc.name, args)
+                            session = tool_session.get(fc.name, chat_session)
+                            try:
+                                result = await session.call_tool(fc.name, arguments=args)
+                                if result.isError:
+                                    error_text = str(result.content)
+                                    logger.warning("Tool %s returned isError: %s", fc.name, error_text)
+                                    if _is_scope_error(error_text):
+                                        raise InsufficientScopesError(error_text)
+                                    tool_response = {"error": error_text}
+                                else:
+                                    logger.info("Tool %s succeeded", fc.name)
+                                    tool_response = {"result": str(result.content)}
+                            except Exception as exc:
+                                if isinstance(exc, InsufficientScopesError):
+                                    raise
+                                logger.error("Tool %s raised exception: %s", fc.name, exc)
+                                tool_response = {"error": str(exc)}
+
+                            response_parts.append(
+                                genai_types.Part.from_function_response(
+                                    name=fc.name,
+                                    response=tool_response,
+                                )
+                            )
+
+                        contents.append(genai_types.Content(role="user", parts=response_parts))
+
+                    else:
+                        logger.warning("Reached max tool rounds (%d) for user=%s", _MAX_TOOL_ROUNDS, self.user_id)
 
         except BaseException as exc:
             scope_error = _find_scope_error(exc)

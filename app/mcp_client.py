@@ -20,6 +20,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 logger = logging.getLogger(__name__)
 
 CHAT_MCP_URL = "https://chatmcp.googleapis.com/mcp/v1"
+PEOPLE_MCP_URL = "https://people.googleapis.com/mcp/v1"
 
 
 async def _log_mcp_request(request: httpx.Request) -> None:
@@ -55,6 +56,7 @@ def _debug_http_client_factory(**kwargs) -> httpx.AsyncClient:
 @asynccontextmanager
 async def workspace_mcp_session(
     access_token: str | None = None,
+    url: str = CHAT_MCP_URL,
     debug_http: bool = False,
 ) -> AsyncGenerator[ClientSession, None]:
     """Async context manager that yields an initialized MCP ClientSession."""
@@ -62,7 +64,7 @@ async def workspace_mcp_session(
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
     factory = _debug_http_client_factory if debug_http else create_mcp_http_client
-    async with streamablehttp_client(CHAT_MCP_URL, headers=headers, httpx_client_factory=factory) as (read, write, _):
+    async with streamablehttp_client(url, headers=headers, httpx_client_factory=factory) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             yield session
