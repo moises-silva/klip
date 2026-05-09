@@ -39,10 +39,13 @@ def _find_scope_error(exc: BaseException) -> InsufficientScopesError | None:
     """
     if isinstance(exc, InsufficientScopesError):
         return exc
-    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 403:
-        auth_header = exc.response.headers.get("www-authenticate", "")
-        if "insufficient_scope" in auth_header or "googleapis.com/auth/" in auth_header:
+    if isinstance(exc, httpx.HTTPStatusError):
+        if exc.response.status_code == 401:
             return InsufficientScopesError(str(exc))
+        if exc.response.status_code == 403:
+            auth_header = exc.response.headers.get("www-authenticate", "")
+            if "insufficient_scope" in auth_header or "googleapis.com/auth/" in auth_header:
+                return InsufficientScopesError(str(exc))
     if isinstance(exc, BaseExceptionGroup):
         for sub in exc.exceptions:
             found = _find_scope_error(sub)

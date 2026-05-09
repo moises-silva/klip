@@ -3,7 +3,7 @@ import logging
 import random
 
 from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user_context
-from .cards import THINKING_PHRASES, text_response, thinking_card, welcome_card
+from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
@@ -80,17 +80,14 @@ async def _run_and_reply(
     if message_name:
         updater_task = asyncio.create_task(_phrase_updater(message_name, stop))
 
-    result = None
+    result: str | dict | None = None
     try:
         async with asyncio.timeout(settings.gemini_timeout):
             result = await agent.respond(text)
     except InsufficientScopesError:
         logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
         auth_url = await get_auth_url(user_id)
-        result = (
-            "I need additional permissions to complete this request. "
-            f"Please re-authorize me: <{auth_url}|Click here to re-authorize>"
-        )
+        result = reauth_card(auth_url)
     except TimeoutError:
         logger.warning("Gemini timed out for user=%s after %ds", user_id, settings.gemini_timeout)
         result = "Sorry, that request took too long. Please try a simpler query."
@@ -105,19 +102,17 @@ async def _run_and_reply(
     if not result:
         return
 
+    body = result if isinstance(result, dict) else {"text": result, "cardsV2": []}
+
     if message_name:
         try:
-            await update_message(
-                message_name,
-                {"text": result, "cardsV2": []},
-                "text,cardsV2",
-            )
+            await update_message(message_name, body, "text,cardsV2")
             return
         except Exception as exc:
             logger.error("Failed to update thinking card in place: %s", exc)
 
     try:
-        await post_message(space, result)
+        await create_message(space, body)
     except Exception as exc:
         logger.error("Failed to post async reply to space=%s: %s", space, exc)
 

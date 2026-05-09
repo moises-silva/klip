@@ -94,5 +94,41 @@ def thinking_card(phrase: str) -> dict:
     return {"cardsV2": [{"cardId": "thinking-card", "card": card}]}
 
 
+def reauth_card(auth_url: str) -> dict:
+    """Shown when a mid-conversation tool call fails due to missing OAuth scopes.
+    Returned as a REST API message body (not the Add-ons envelope) so it can
+    replace the thinking card in place via update_message."""
+    return {
+        "text": "",
+        "cardsV2": [
+            {
+                "cardId": "reauth-card",
+                "card": {
+                    "header": {
+                        "title": "Additional permissions needed",
+                        "subtitle": "Klip needs more access to complete this request.",
+                    },
+                    "sections": [
+                        {
+                            "widgets": [
+                                {
+                                    "buttonList": {
+                                        "buttons": [
+                                            {
+                                                "text": "Re-authorize Klip",
+                                                "onClick": {"openLink": {"url": auth_url}},
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+
+
 def text_response(message: str) -> dict:
     return _chat_action({"text": message})
