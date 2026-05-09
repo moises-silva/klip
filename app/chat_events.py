@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import random
 
 from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user_context
-from .cards import text_response, welcome_card
-from .chat_api import post_message
+from .cards import THINKING_PHRASES, text_response, thinking_card, welcome_card
+from .chat_api import create_message, post_message, update_message
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
 
@@ -56,7 +57,30 @@ async def handle_added_to_space(event: dict) -> dict:
     return welcome_card(auth_url)
 
 
-async def _run_and_reply(agent: GeminiAgent, text: str, space: str, user_id: str) -> None:
+async def _phrase_updater(message_name: str, stop: asyncio.Event) -> None:
+    """Cycle through witty phrases in the thinking card every 3 seconds until stopped."""
+    phrases = random.sample(THINKING_PHRASES, len(THINKING_PHRASES))
+    idx = 0
+    while not stop.is_set():
+        await asyncio.sleep(3)
+        if stop.is_set():
+            break
+        idx = (idx + 1) % len(phrases)
+        try:
+            await update_message(message_name, thinking_card(phrases[idx]), "cardsV2")
+        except Exception as exc:
+            logger.warning("Failed to update thinking phrase: %s", exc)
+
+
+async def _run_and_reply(
+    agent: GeminiAgent, text: str, space: str, user_id: str, message_name: str | None
+) -> None:
+    stop = asyncio.Event()
+    updater_task = None
+    if message_name:
+        updater_task = asyncio.create_task(_phrase_updater(message_name, stop))
+
+    result = None
     try:
         async with asyncio.timeout(settings.gemini_timeout):
             result = await agent.respond(text)
@@ -73,6 +97,25 @@ async def _run_and_reply(agent: GeminiAgent, text: str, space: str, user_id: str
     except Exception as exc:
         logger.error("Background task failed for user=%s: %s", user_id, exc, exc_info=True)
         result = "Sorry, something went wrong. Please try again."
+    finally:
+        stop.set()
+        if updater_task:
+            await updater_task
+
+    if not result:
+        return
+
+    if message_name:
+        try:
+            await update_message(
+                message_name,
+                {"text": result, "cardsV2": []},
+                "text,cardsV2",
+            )
+            return
+        except Exception as exc:
+            logger.error("Failed to update thinking card in place: %s", exc)
+
     try:
         await post_message(space, result)
     except Exception as exc:
@@ -96,8 +139,18 @@ async def handle_message(event: dict) -> dict:
 
     space = _space_name(event)
     agent = GeminiAgent(user_id, access_token)
-    asyncio.create_task(_run_and_reply(agent, text, space, user_id))
-    return text_response("On it...")
+
+    # Create the thinking card now so it appears immediately when the sync response
+    # completes. The background task then updates it in place as Gemini works.
+    message_name = None
+    try:
+        phrase = random.choice(THINKING_PHRASES)
+        message_name = await create_message(space, thinking_card(phrase))
+    except Exception as exc:
+        logger.error("Failed to create thinking card for user=%s: %s", user_id, exc)
+
+    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name))
+    return {}
 
 
 async def handle_card_clicked(event: dict) -> dict:

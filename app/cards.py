@@ -1,4 +1,27 @@
 """Card v2 response builders for Google Chat via the Workspace Add-ons framework."""
+from .config import settings
+
+THINKING_PHRASES = [
+    "Clipping through your conversations...",
+    "Pulling the threads together...",
+    "Sifting through your Workspace...",
+    "Connecting the dots...",
+    "Reading between the lines...",
+    "Mining your messages (the good kind)...",
+    "Rummaging through your inbox...",
+    "Assembling the relevant bits...",
+    "Consulting the archives...",
+    "Untangling the conversation threads...",
+    "Thinking very hard thoughts...",
+    "Almost there... probably...",
+    "Searching your digital filing cabinet...",
+    "Making sense of it all...",
+    "Your patience is appreciated!",
+    "Good things take a moment...",
+    "Piecing it all together...",
+    "Gathering intelligence...",
+    "Scanning for what matters...",
+]
 
 def _chat_action(message_body: dict) -> dict:
     """Wrap a Chat message in the Workspace Add-ons response envelope."""
@@ -52,6 +75,40 @@ def welcome_card(auth_url: str) -> dict:
             }
         ]
     })
+
+
+def thinking_card(phrase: str) -> dict:
+    """Shown while Gemini is working. Sent and updated via the Chat REST API (not Add-ons envelope)."""
+    if settings.klip_gif_url:
+        section = {
+            "widgets": [
+                {
+                    "columns": {
+                        "columnItems": [
+                            {
+                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
+                                "horizontalAlignment": "START",
+                                "verticalAlignment": "CENTER",
+                                "widgets": [
+                                    {"image": {"imageUrl": settings.klip_gif_url, "altText": "Klip is thinking"}}
+                                ],
+                            },
+                            {
+                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                                "horizontalAlignment": "START",
+                                "verticalAlignment": "CENTER",
+                                "widgets": [
+                                    {"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}
+                                ],
+                            },
+                        ]
+                    }
+                }
+            ]
+        }
+    else:
+        section = {"widgets": [{"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}]}
+    return {"cardsV2": [{"cardId": "thinking-card", "card": {"sections": [section]}}]}
 
 
 def text_response(message: str) -> dict:

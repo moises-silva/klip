@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     debug_mcp_http: bool = False
     # Seconds before the Gemini agentic loop is cancelled and an error is sent.
     gemini_timeout: int = 60
+    # Public URL of the animated GIF shown in the thinking card while Gemini works.
+    # Leave empty to omit the image and show only the rotating phrase.
+    klip_gif_url: str = ""
 
 
 settings = Settings()
