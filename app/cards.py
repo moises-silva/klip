@@ -80,35 +80,18 @@ def welcome_card(auth_url: str) -> dict:
 def thinking_card(phrase: str) -> dict:
     """Shown while Gemini is working. Sent and updated via the Chat REST API (not Add-ons envelope)."""
     if settings.klip_gif_url:
-        section = {
-            "widgets": [
-                {
-                    "columns": {
-                        "columnItems": [
-                            {
-                                "horizontalSizeStyle": "FILL_MINIMUM_SPACE",
-                                "horizontalAlignment": "START",
-                                "verticalAlignment": "CENTER",
-                                "widgets": [
-                                    {"image": {"imageUrl": settings.klip_gif_url, "altText": "Klip is thinking"}}
-                                ],
-                            },
-                            {
-                                "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
-                                "horizontalAlignment": "START",
-                                "verticalAlignment": "CENTER",
-                                "widgets": [
-                                    {"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}
-                                ],
-                            },
-                        ]
-                    }
-                }
-            ]
+        card = {
+            "header": {
+                "title": "",
+                "subtitle": phrase,
+                "imageUrl": settings.klip_gif_url,
+                "imageType": "CIRCLE",
+                "imageAltText": "Klip is thinking",
+            }
         }
     else:
-        section = {"widgets": [{"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}]}
-    return {"cardsV2": [{"cardId": "thinking-card", "card": {"sections": [section]}}]}
+        card = {"sections": [{"widgets": [{"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}]}]}
+    return {"cardsV2": [{"cardId": "thinking-card", "card": card}]}
 
 
 def text_response(message: str) -> dict:
