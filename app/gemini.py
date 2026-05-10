@@ -171,10 +171,16 @@ class GeminiAgent:
                     response_parts = []
                     for fc in function_calls:
                         args = dict(fc.args) if fc.args else {}
+                        bound = tool_session.get(fc.name)
+                        if settings.strip_unknown_tool_params:
+                            known = set(bound.inputSchema.get("properties", {}).keys())
+                            stripped = {k for k in args if k not in known}
+                            if stripped:
+                                logger.warning("Stripping unknown params for tool=%s: %s", fc.name, stripped)
+                                args = {k: v for k, v in args.items() if k in known}
                         logger.info("Calling MCP tool=%s args=%s", fc.name, args)
-                        session = tool_session.get(fc.name)
                         try:
-                            result = await session.call_tool(fc.name, arguments=args)
+                            result = await bound.session.call_tool(bound.original_name, arguments=args)
                             if result.isError:
                                 error_text = str(result.content)
                                 logger.warning("Tool %s returned isError: %s", fc.name, error_text)

@@ -12,6 +12,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 
 import httpx
 from mcp import ClientSession
@@ -28,6 +29,24 @@ DRIVE_MCP_URL = "https://drivemcp.googleapis.com/mcp/v1"
 
 # Add new MCP servers here — no other changes needed.
 MCP_SERVERS = [CHAT_MCP_URL, PEOPLE_MCP_URL, GMAIL_MCP_URL, CALENDAR_MCP_URL, DRIVE_MCP_URL]
+
+_SERVER_PREFIX = {
+    CHAT_MCP_URL: "chat",
+    PEOPLE_MCP_URL: "people",
+    GMAIL_MCP_URL: "gmail",
+    CALENDAR_MCP_URL: "calendar",
+    DRIVE_MCP_URL: "drive",
+}
+
+
+@dataclass
+class BoundTool:
+    """MCP tool with its prefixed name (sent to Gemini) and original name (sent to MCP)."""
+    name: str            # prefixed, e.g. "chat_list_spaces"
+    original_name: str   # as registered on the MCP server, e.g. "list_spaces"
+    description: str
+    inputSchema: dict
+    session: ClientSession
 
 
 async def _log_mcp_request(request: httpx.Request) -> None:
@@ -81,22 +100,31 @@ async def workspace_mcp_session(
 async def multi_mcp_session(
     access_token: str | None = None,
     debug_http: bool = False,
-) -> AsyncGenerator[tuple[dict[str, ClientSession], list], None]:
-    """Open all MCP_SERVERS in parallel and yield (tool_name → session, all_tools)."""
+) -> AsyncGenerator[tuple[dict[str, BoundTool], list[BoundTool]], None]:
+    """Open all MCP_SERVERS and yield (prefixed_name → BoundTool, all_tools)."""
     async with AsyncExitStack() as stack:
         sessions = []
         for url in MCP_SERVERS:
-            sessions.append(await stack.enter_async_context(
+            sessions.append((url, await stack.enter_async_context(
                 workspace_mcp_session(access_token, url=url, debug_http=debug_http)
-            ))
-        tools_per_server = await asyncio.gather(*[s.list_tools() for s in sessions])
+            )))
+        tools_per_server = await asyncio.gather(*[s.list_tools() for _, s in sessions])
 
-        all_tools: list = []
-        tool_session: dict[str, ClientSession] = {}
-        for session, result in zip(sessions, tools_per_server):
+        all_tools: list[BoundTool] = []
+        tool_lookup: dict[str, BoundTool] = {}
+        for (url, session), result in zip(sessions, tools_per_server):
+            prefix = _SERVER_PREFIX.get(url, "unknown")
             for tool in result.tools:
-                if tool.name not in tool_session:
-                    all_tools.append(tool)
-                    tool_session[tool.name] = session
+                prefixed = f"{prefix}_{tool.name}"
+                if prefixed not in tool_lookup:
+                    bound = BoundTool(
+                        name=prefixed,
+                        original_name=tool.name,
+                        description=tool.description,
+                        inputSchema=tool.inputSchema,
+                        session=session,
+                    )
+                    all_tools.append(bound)
+                    tool_lookup[prefixed] = bound
 
-        yield tool_session, all_tools
+        yield tool_lookup, all_tools

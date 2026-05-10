@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Public URL of the animated GIF shown in the thinking card while Gemini works.
     # Leave empty to omit the image and show only the rotating phrase.
     klip_gif_url: str = ""
+    # Strip parameters not declared in a tool's MCP schema before dispatching.
+    # Works around Gemini hallucinating extra parameters (e.g. orderBy on gmail_search_threads).
+    strip_unknown_tool_params: bool = False
 
 
 settings = Settings()
