@@ -226,7 +226,7 @@ ______________________________________________________________________
 
 ## Environment variable reference
 
-See `.env.example` for the full list with descriptions.
+See [.env.example](.env.example) for the full list with descriptions.
 
 | Variable              | Required | Notes                                                                  |
 | --------------------- | -------- | ---------------------------------------------------------------------- |
