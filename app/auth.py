@@ -85,6 +85,13 @@ def _decode_state(state: str) -> dict:
     return json.loads(base64.urlsafe_b64decode(state.encode()).decode())
 
 
+async def delete_user(user_id: str) -> None:
+    """Delete all stored data for a user (tokens, history, context, everything)."""
+    db = _get_db()
+    await db.collection("users").document(_doc_id(user_id)).delete()
+    logger.info("Deleted all data for user=%s", user_id)
+
+
 async def save_pending_message(user_id: str, text: str) -> None:
     """Persist the message that triggered a re-auth so it can be replayed after OAuth completes."""
     db = _get_db()

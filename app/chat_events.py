@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 
-from .auth import get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
+from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
 from .history import clear_history, load_history, save_history
 from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
@@ -149,6 +149,7 @@ async def _run_and_reply(
 
 
 _COMMAND_FORGET_HISTORY = 1
+_COMMAND_RESET = 2
 
 
 async def handle_message(event: dict) -> dict:
@@ -195,6 +196,10 @@ async def handle_app_command(event: dict) -> dict:
     if cmd_id == _COMMAND_FORGET_HISTORY:
         await clear_history(user_id)
         return text_response("Done! I've forgotten our conversation history.")
+
+    if cmd_id == _COMMAND_RESET:
+        await delete_user(user_id)
+        return text_response("You have been forgotten. 🫧 It's like we never met. Say hello to start fresh!")
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
