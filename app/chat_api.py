@@ -18,19 +18,28 @@ def _get_bot_token() -> str:
     return creds.token
 
 
-async def create_message(space_name: str, body: dict) -> str:
-    """Create a message in a Chat space and return its resource name."""
+async def create_message(space_name: str, body: dict, thread_name: str | None = None) -> tuple[str, str]:
+    """Create a message in a Chat space and return (message_name, thread_name).
+
+    Pass thread_name to post as a reply in an existing thread.
+    """
     token = await asyncio.to_thread(_get_bot_token)
+    params = {}
+    if thread_name:
+        body = {**body, "thread": {"name": thread_name}}
+        params["messageReplyOption"] = "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{_MESSAGES_BASE}/{space_name}/messages",
             headers={"Authorization": f"Bearer {token}"},
+            params=params,
             json=body,
         )
     if resp.is_error:
         logger.error("create_message failed: %s %s", resp.status_code, resp.text)
     resp.raise_for_status()
-    return resp.json()["name"]
+    data = resp.json()
+    return data["name"], data["thread"]["name"]
 
 
 async def update_message(message_name: str, body: dict, update_mask: str) -> None:

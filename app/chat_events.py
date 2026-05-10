@@ -1,6 +1,8 @@
 import asyncio
+import json
 import logging
 import random
+import time
 
 from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
 from .history import clear_history, load_history, save_history
@@ -91,8 +93,10 @@ async def _phrase_updater(message_name: str, stop: asyncio.Event) -> None:
 
 
 async def _run_and_reply(
-    agent: GeminiAgent, text: str, space: str, user_id: str, message_name: str | None
+    agent: GeminiAgent, text: str, space: str, user_id: str,
+    message_name: str | None, thread_name: str | None = None,
 ) -> None:
+    t_start = time.monotonic()
     stop = asyncio.Event()
     updater_task = None
     if message_name:
@@ -104,11 +108,17 @@ async def _run_and_reply(
     except Exception as exc:
         logger.warning("Failed to load history for user=%s: %s", user_id, exc)
 
+    raw_result: str | None = None
     result: str | dict | None = None
     updated_history: list[dict] | None = None
+    tool_records: list[dict] = []
+    gemini_ms: int = 0
     try:
         async with asyncio.timeout(settings.gemini_timeout):
-            result, updated_history = await agent.respond(text, history)
+            t_gemini = time.monotonic()
+            result, updated_history, tool_records = await agent.respond(text, history)
+            gemini_ms = int((time.monotonic() - t_gemini) * 1000)
+            raw_result = result
     except InsufficientScopesError:
         logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
         await save_pending_message(user_id, text)
@@ -136,17 +146,34 @@ async def _run_and_reply(
 
     body = result if isinstance(result, dict) else {"text": md_to_chat(result), "cardsV2": []}
 
+    posted = False
     if message_name:
         try:
             await update_message(message_name, body, "text,cardsV2")
-            return
+            posted = True
         except Exception as exc:
             logger.error("Failed to update thinking card in place: %s", exc)
 
-    try:
-        await create_message(space, body)
-    except Exception as exc:
-        logger.error("Failed to post async reply to space=%s: %s", space, exc)
+    if not posted:
+        try:
+            await create_message(space, body)
+            posted = True
+        except Exception as exc:
+            logger.error("Failed to post async reply to space=%s: %s", space, exc)
+
+    if settings.debug_chat and posted and raw_result is not None and thread_name:
+        total_ms = int((time.monotonic() - t_start) * 1000)
+        debug_data = {
+            "timing": {"total_ms": total_ms, "gemini_ms": gemini_ms},
+            "gemini_raw": raw_result,
+            "chat_sent_raw": body.get("text", ""),
+            "tools": tool_records,
+        }
+        debug_json = json.dumps(debug_data, indent=2, ensure_ascii=False)
+        try:
+            await create_message(space, {"text": f"```\n{debug_json}\n```"}, thread_name=thread_name)
+        except Exception as exc:
+            logger.error("Failed to post debug message: %s", exc)
 
 
 _COMMAND_FORGET_HISTORY = 1
@@ -178,13 +205,14 @@ async def handle_message(event: dict) -> dict:
     # Create the thinking card now so it appears immediately when the sync response
     # completes. The background task then updates it in place as Gemini works.
     message_name = None
+    thread_name = None
     try:
         phrase = random.choice(THINKING_PHRASES)
-        message_name = await create_message(space, thinking_card(phrase))
+        message_name, thread_name = await create_message(space, thinking_card(phrase))
     except Exception as exc:
         logger.error("Failed to create thinking card for user=%s: %s", user_id, exc)
 
-    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name))
+    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name, thread_name))
     return {}
 
 
@@ -229,10 +257,11 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
     agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""))
 
     message_name = None
+    thread_name = None
     try:
         phrase = random.choice(THINKING_PHRASES)
-        message_name = await create_message(space_name, thinking_card(phrase))
+        message_name, thread_name = await create_message(space_name, thinking_card(phrase))
     except Exception as exc:
         logger.error("Failed to create thinking card for replay user=%s: %s", user_id, exc)
 
-    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name))
+    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name, thread_name))

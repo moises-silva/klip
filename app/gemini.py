@@ -9,6 +9,7 @@ integration) so that:
   - Duplicate tools from the MCP server are deduplicated.
 """
 import logging
+import time
 from datetime import datetime, timezone
 
 import google.genai as genai
@@ -113,9 +114,10 @@ class GeminiAgent:
 
     async def respond(
         self, user_message: str, history: list[dict] | None = None
-    ) -> tuple[str, list[dict]]:
-        """Process a user message and return (response_text, updated_history)."""
+    ) -> tuple[str, list[dict], list[dict]]:
+        """Process a user message and return (response_text, updated_history, tool_records)."""
         history = history or []
+        tool_records: list[dict] = []
         try:
             client = _get_client()
             async with multi_mcp_session(self.access_token, debug_http=settings.debug_mcp_http) as (tool_session, all_tools):
@@ -179,22 +181,29 @@ class GeminiAgent:
                                 logger.warning("Stripping unknown params for tool=%s: %s", fc.name, stripped)
                                 args = {k: v for k, v in args.items() if k in known}
                         logger.info("Calling MCP tool=%s args=%s", fc.name, args)
+                        t_tool = time.monotonic()
                         try:
                             result = await bound.session.call_tool(bound.original_name, arguments=args)
+                            duration_ms = int((time.monotonic() - t_tool) * 1000)
                             if result.isError:
                                 error_text = str(result.content)
                                 logger.warning("Tool %s returned isError: %s", fc.name, error_text)
                                 if _is_scope_error(error_text):
                                     raise InsufficientScopesError(error_text)
                                 tool_response = {"error": error_text}
+                                tool_records.append({"name": fc.name, "duration_ms": duration_ms, "args": args, "response_preview": error_text[:100], "is_error": True})
                             else:
                                 logger.info("Tool %s succeeded", fc.name)
-                                tool_response = {"result": str(result.content)}
+                                raw = str(result.content)
+                                tool_response = {"result": raw}
+                                tool_records.append({"name": fc.name, "duration_ms": duration_ms, "args": args, "response_preview": raw[:100], "is_error": False})
                         except Exception as exc:
+                            duration_ms = int((time.monotonic() - t_tool) * 1000)
                             if isinstance(exc, InsufficientScopesError):
                                 raise
                             logger.error("Tool %s raised exception: %s", fc.name, exc)
                             tool_response = {"error": str(exc)}
+                            tool_records.append({"name": fc.name, "duration_ms": duration_ms, "args": args, "response_preview": str(exc)[:100], "is_error": True})
 
                         response_parts.append(
                             genai_types.Part.from_function_response(
@@ -242,4 +251,4 @@ class GeminiAgent:
             {"role": "user", "text": user_message},
             {"role": "model", "text": response_text},
         ]
-        return response_text, updated_history
+        return response_text, updated_history, tool_records

@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # Strip parameters not declared in a tool's MCP schema before dispatching.
     # Works around Gemini hallucinating extra parameters (e.g. orderBy on gmail_search_threads).
     strip_unknown_tool_params: bool = False
+    # Post a debug info message in-thread after every Gemini response (developer use only).
+    debug_chat: bool = False
 
 
 settings = Settings()
