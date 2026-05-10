@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import signal
@@ -12,6 +13,7 @@ from .chat_events import (
     handle_card_clicked,
     handle_message,
     handle_removed_from_space,
+    replay_pending_message,
 )
 from .auth import handle_oauth_callback
 from .config import settings
@@ -76,10 +78,13 @@ async def auth_callback(
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
     try:
-        redirect_uri = await handle_oauth_callback(code, state)
+        redirect_uri, pending_replay = await handle_oauth_callback(code, state)
     except Exception as exc:
         logger.error("OAuth callback failed: %s", exc)
         raise HTTPException(status_code=400, detail="Authorization failed")
+
+    if pending_replay:
+        asyncio.create_task(replay_pending_message(**pending_replay))
 
     if redirect_uri:
         return RedirectResponse(url=redirect_uri)

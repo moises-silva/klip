@@ -81,6 +81,15 @@ def _decode_state(state: str) -> dict:
     return json.loads(base64.urlsafe_b64decode(state.encode()).decode())
 
 
+async def save_pending_message(user_id: str, text: str) -> None:
+    """Persist the message that triggered a re-auth so it can be replayed after OAuth completes."""
+    db = _get_db()
+    await db.collection("users").document(_doc_id(user_id)).set(
+        {"pending_message": text}, merge=True
+    )
+    logger.info("Saved pending message for user=%s", user_id)
+
+
 async def save_user_context(
     user_id: str, space_name: str, config_redirect_uri: str, email: str = ""
 ) -> None:
@@ -198,10 +207,16 @@ async def _send_authorized_message(space_name: str) -> None:
         logger.error("Failed to send authorization complete message: %s", exc)
 
 
-async def handle_oauth_callback(code: str, state: str) -> str | None:
+async def handle_oauth_callback(
+    code: str, state: str
+) -> tuple[str | None, dict | None]:
     """
-    Exchange the authorization code for tokens, persist them, and return the
-    configCompleteRedirectUri to send the user back to Chat (or None).
+    Exchange the authorization code for tokens, persist them, and return
+    (configCompleteRedirectUri, pending_replay).
+
+    pending_replay is a dict with user_id/space_name/text when the OAuth was
+    triggered mid-conversation by a scope error — the caller should replay the
+    original message instead of showing "You're all set!".
     """
     state_data = _decode_state(state)
     user_id = state_data["user_id"]
@@ -220,14 +235,21 @@ async def handle_oauth_callback(code: str, state: str) -> str | None:
     await store_tokens(user_id, flow.credentials)
     logger.info("OAuth complete for user=%s", user_id)
 
-    db = _get_db()
     doc = await db.collection("users").document(_doc_id(user_id)).get()
     config_redirect_uri = None
+    pending_replay = None
     if doc.exists:
         data = doc.to_dict()
         config_redirect_uri = data.get("config_redirect_uri")
         space_name = data.get("space_name")
-        if space_name:
+        pending_message = data.get("pending_message")
+        if pending_message and space_name:
+            await db.collection("users").document(_doc_id(user_id)).set(
+                {"pending_message": firestore.DELETE_FIELD}, merge=True
+            )
+            pending_replay = {"user_id": user_id, "space_name": space_name, "text": pending_message}
+            logger.info("Pending message found for user=%s, will replay after re-auth", user_id)
+        elif space_name:
             await _send_authorized_message(space_name)
 
-    return config_redirect_uri
+    return config_redirect_uri, pending_replay

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 
-from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_user_context
+from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_pending_message, save_user_context
 from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
 from .config import settings
@@ -86,6 +86,7 @@ async def _run_and_reply(
             result = await agent.respond(text)
     except InsufficientScopesError:
         logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
+        await save_pending_message(user_id, text)
         auth_url = await get_auth_url(user_id)
         result = reauth_card(auth_url)
     except TimeoutError:
@@ -157,3 +158,23 @@ async def handle_card_clicked(event: dict) -> dict:
 async def handle_removed_from_space(event: dict) -> dict:
     logger.info("REMOVED_FROM_SPACE user=%s", _user_id(event))
     return {}
+
+
+async def replay_pending_message(user_id: str, space_name: str, text: str) -> None:
+    """Replay a message that was interrupted by a re-auth flow."""
+    logger.info("Replaying pending message for user=%s", user_id)
+    access_token = await get_fresh_access_token(user_id)
+    if not access_token:
+        logger.error("Cannot replay message for user=%s: no access token after re-auth", user_id)
+        return
+
+    agent = GeminiAgent(user_id, access_token)
+
+    message_name = None
+    try:
+        phrase = random.choice(THINKING_PHRASES)
+        message_name = await create_message(space_name, thinking_card(phrase))
+    except Exception as exc:
+        logger.error("Failed to create thinking card for replay user=%s: %s", user_id, exc)
+
+    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name))
