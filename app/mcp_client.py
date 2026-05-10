@@ -24,9 +24,10 @@ CHAT_MCP_URL = "https://chatmcp.googleapis.com/mcp/v1"
 PEOPLE_MCP_URL = "https://people.googleapis.com/mcp/v1"
 GMAIL_MCP_URL = "https://gmailmcp.googleapis.com/mcp/v1"
 CALENDAR_MCP_URL = "https://calendarmcp.googleapis.com/mcp/v1"
+DRIVE_MCP_URL = "https://drivemcp.googleapis.com/mcp/v1"
 
 # Add new MCP servers here — no other changes needed.
-MCP_SERVERS = [CHAT_MCP_URL, PEOPLE_MCP_URL, GMAIL_MCP_URL, CALENDAR_MCP_URL]
+MCP_SERVERS = [CHAT_MCP_URL, PEOPLE_MCP_URL, GMAIL_MCP_URL, CALENDAR_MCP_URL, DRIVE_MCP_URL]
 
 
 async def _log_mcp_request(request: httpx.Request) -> None:
