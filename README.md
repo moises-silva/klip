@@ -1,18 +1,22 @@
 <h1><img src="https://storage.googleapis.com/klip-static/avatar_transparent.png" alt="Klip" width="60" valign="middle" />Klip</h1>
 
-Klip is an open-source Google Chat App that acts as a personal Workspace assistant powered by Gemini. Users interact with it via Google Chat DMs. It reads and searches their Workspace data through the Google Chat MCP server and responds using a Gemini model running on Vertex AI.
+Klip is an open-source Google Chat App that acts as a personal Workspace assistant powered by
+Gemini. Users interact with it via Google Chat DMs. It reads and searches their Workspace data
+through the Google Chat MCP server and responds using a Gemini model running on Vertex AI.
 
 Klip is designed to be self-hosted by a company or individual on their own GCP infrastructure.
 
 ## How it works
 
 1. User sends a message to the Klip bot in Google Chat
-2. Google delivers the event to Klip's HTTP endpoint
-3. Klip fetches the user's OAuth token from Firestore and connects to the Google Chat MCP server on their behalf
-4. Gemini runs a tool-calling loop, querying Workspace data as needed
-5. Klip sends the response back to the user in Chat
+1. Google delivers the event to Klip's HTTP endpoint
+1. Klip fetches the user's OAuth token from Firestore and connects to the Google Chat MCP server on
+   their behalf
+1. Gemini runs a tool-calling loop, querying Workspace data as needed
+1. Klip sends the response back to the user in Chat
 
-On first use, Klip prompts the user to authorize via OAuth 2.0. Tokens are stored in Firestore and refreshed automatically.
+On first use, Klip prompts the user to authorize via OAuth 2.0. Tokens are stored in Firestore and
+refreshed automatically.
 
 ## Prerequisites
 
@@ -21,25 +25,29 @@ On first use, Klip prompts the user to authorize via OAuth 2.0. Tokens are store
 - [`gcloud` CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated
 - Docker (for building the container image)
 - Python 3.12+ and a virtual environment (for local development)
-- Enrollment in Google's [Developer Preview Program](https://developers.google.com/workspace/preview) for MCP tool invocation
+- Enrollment in Google's
+  [Developer Preview Program](https://developers.google.com/workspace/preview) for MCP tool
+  invocation
 
----
+______________________________________________________________________
 
 ## Option A: Cloud Run deployment (production)
 
-This is the standard self-hosted setup. The app runs on Cloud Run; all GCP services are managed automatically.
+This is the standard self-hosted setup. The app runs on Cloud Run; all GCP services are managed
+automatically.
 
 ### 1. Configure OAuth credentials
 
 In [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**:
 
 1. Create an **OAuth 2.0 Client ID** (Web application type)
-2. Leave the redirect URIs blank for now — you'll add the Cloud Run URL after the first deploy
-3. Copy the client ID and secret
+1. Leave the redirect URIs blank for now — you'll add the Cloud Run URL after the first deploy
+1. Copy the client ID and secret
 
 ### 2. Bootstrap GCP infrastructure
 
-Run the one-time setup script. This enables APIs, creates the service account, Firestore database, Artifact Registry repository, and Secret Manager secrets:
+Run the one-time setup script. This enables APIs, creates the service account, Firestore database,
+Artifact Registry repository, and Secret Manager secrets:
 
 ```bash
 GCP_PROJECT=your-project-id bash deploy/setup.sh
@@ -58,7 +66,8 @@ printf 'YOUR_CLIENT_SECRET' | gcloud secrets versions add oauth-client-secret  -
 GCP_PROJECT=your-project-id bash deploy/deploy.sh
 ```
 
-The script builds the container, deploys to Cloud Run, then retrieves the stable service URL and sets `APP_BASE_URL`, `ADDON_AUDIENCE`, and `ADDON_TOKEN_ISSUER` automatically.
+The script builds the container, deploys to Cloud Run, then retrieves the stable service URL and
+sets `APP_BASE_URL`, `ADDON_AUDIENCE`, and `ADDON_TOKEN_ISSUER` automatically.
 
 ### 4. Register the OAuth redirect URI
 
@@ -79,11 +88,13 @@ In Cloud Console → **Google Workspace Add-ons** (or **Chat API → Configurati
 
 Install the add-on for your Google Workspace and send a message to the Klip bot in Google Chat.
 
----
+______________________________________________________________________
 
 ## Option B: Hybrid development setup (VPS + Apache)
 
-This setup runs the Python app on your own server (e.g. a DigitalOcean VPS) behind Apache, with GCP services (Firestore, Vertex AI, Secret Manager) remaining in the cloud. It gives you a fast edit → reload → test cycle without rebuilding and pushing a container image.
+This setup runs the Python app on your own server (e.g. a DigitalOcean VPS) behind Apache, with GCP
+services (Firestore, Vertex AI, Secret Manager) remaining in the cloud. It gives you a fast edit →
+reload → test cycle without rebuilding and pushing a container image.
 
 ### Architecture
 
@@ -156,11 +167,15 @@ On the VPS, run:
 gcloud auth application-default login --no-browser
 ```
 
-It prints a `gcloud auth application-default login` command to run on a machine that has a browser (e.g. your laptop). Running that command opens a browser window, and after you authenticate it prints an authorization URL. Copy that URL and paste it back into the VPS terminal to complete the process. Credentials are saved to `~/.config/gcloud/application_default_credentials.json`.
+It prints a `gcloud auth application-default login` command to run on a machine that has a browser
+(e.g. your laptop). Running that command opens a browser window, and after you authenticate it
+prints an authorization URL. Copy that URL and paste it back into the VPS terminal to complete the
+process. Credentials are saved to `~/.config/gcloud/application_default_credentials.json`.
 
 ### 5. Grant your personal account Vertex AI access
 
-The Cloud Run service account already has the right IAM roles. For local development, grant your own account the same:
+The Cloud Run service account already has the right IAM roles. For local development, grant your own
+account the same:
 
 ```bash
 gcloud projects add-iam-policy-binding your-project-id \
@@ -191,7 +206,8 @@ source .venv/bin/activate
 uvicorn app.main:app --host 127.0.0.1 --port 9000 --reload
 ```
 
-`--reload` watches `.py` files and restarts automatically. Changes to `.env` require a manual restart.
+`--reload` watches `.py` files and restarts automatically. Changes to `.env` require a manual
+restart.
 
 ### 8. Verify
 
@@ -206,28 +222,26 @@ Watch live logs from Apache and the app:
 sudo tail -f /var/log/apache2/error.log /var/log/apache2/access.log
 ```
 
----
+______________________________________________________________________
 
 ## Environment variable reference
 
 See `.env.example` for the full list with descriptions.
 
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `GCP_PROJECT` | Yes | GCP project ID |
-| `REGION` | No | Defaults to `us-central1` |
-| `GEMINI_MODEL` | No | Defaults to `gemini-2.5-flash` |
-| `OAUTH_CLIENT_ID` | Yes | From Cloud Console credentials |
-| `OAUTH_CLIENT_SECRET` | Yes | From Cloud Console credentials (use Secret Manager in Cloud Run) |
-| `APP_BASE_URL` | Yes | Public base URL, no trailing slash |
-| `ADDON_AUDIENCE` | Yes | `APP_BASE_URL/events` |
-| `ADDON_TOKEN_ISSUER` | Yes | `service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com` |
-| `VERIFY_ADDON_TOKENS` | No | Defaults to `true`. Always `true` in production. |
-| `DEBUG_GEMINI` | No | Set to `true` for verbose Gemini SDK and MCP transport logs |
+| Variable | Required | Notes | |----------|----------|-------| | `GCP_PROJECT` | Yes | GCP project
+ID | | `REGION` | No | Defaults to `us-central1` | | `GEMINI_MODEL` | No | Defaults to
+`gemini-2.5-flash` | | `OAUTH_CLIENT_ID` | Yes | From Cloud Console credentials | |
+`OAUTH_CLIENT_SECRET` | Yes | From Cloud Console credentials (use Secret Manager in Cloud Run) | |
+`APP_BASE_URL` | Yes | Public base URL, no trailing slash | | `ADDON_AUDIENCE` | Yes |
+`APP_BASE_URL/events` | | `ADDON_TOKEN_ISSUER` | Yes |
+`service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com` | | `VERIFY_ADDON_TOKENS` |
+No | Defaults to `true`. Always `true` in production. | | `DEBUG_GEMINI` | No | Set to `true` for
+verbose Gemini SDK and MCP transport logs |
 
 ## Testing the MCP connection
 
-A test script is included to verify your MCP setup at various levels without needing a live Chat event:
+A test script is included to verify your MCP setup at various levels without needing a live Chat
+event:
 
 ```bash
 # Levels 0–4: ADC check, handshake, tool list, tool call
@@ -236,4 +250,4 @@ python scripts/test_mcp.py --level 2
 
 ## Future work
 
-See `TODO.md`.
+See [TODO.md](TODO.md).
