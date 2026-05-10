@@ -1,0 +1,20 @@
+#!/bin/bash
+# Automatically reformat staged markdown files with mdformat before committing.
+set -e
+
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' || true)
+
+if [ -z "$STAGED_MD" ]; then
+    exit 0
+fi
+
+MDFORMAT="$(git rev-parse --show-toplevel)/.venv/bin/mdformat"
+
+if [ ! -x "$MDFORMAT" ]; then
+    echo "mdformat not found at $MDFORMAT — skipping markdown formatting"
+    echo "Run: pip install -r requirements-dev.txt"
+    exit 0
+fi
+
+echo "$STAGED_MD" | xargs "$MDFORMAT" --wrap 100
+echo "$STAGED_MD" | xargs git add
