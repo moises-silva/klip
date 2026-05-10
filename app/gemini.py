@@ -17,6 +17,7 @@ import httpx
 from google.genai import types as genai_types
 
 from .config import settings
+from .formatting import md_to_chat
 from .mcp_client import multi_mcp_session
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,8 @@ class GeminiAgent:
                             if stripped:
                                 logger.warning("Stripping unknown params for tool=%s: %s", fc.name, stripped)
                                 args = {k: v for k, v in args.items() if k in known}
+                        if fc.name == "chat_send_message" and "messageText" in args:
+                            args = {**args, "messageText": md_to_chat(args["messageText"])}
                         logger.info("Calling MCP tool=%s args=%s", fc.name, args)
                         t_tool = time.monotonic()
                         try:
