@@ -6,6 +6,7 @@ from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_in
 from .history import clear_history, load_history, save_history
 from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
+from .formatting import md_to_chat
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
 
@@ -133,7 +134,7 @@ async def _run_and_reply(
     if not result:
         return
 
-    body = result if isinstance(result, dict) else {"text": result, "cardsV2": []}
+    body = result if isinstance(result, dict) else {"text": md_to_chat(result), "cardsV2": []}
 
     if message_name:
         try:

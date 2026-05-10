@@ -1,11 +1,14 @@
 include .env
 export
 
-.PHONY: deploy setup run dev
+.PHONY: deploy setup run dev test
 
 dev:
 	pip install -r requirements-dev.txt
 	git config core.hooksPath .githooks
+
+test:
+	pytest tests/ -v
 
 setup:
 	bash deploy/setup.sh
