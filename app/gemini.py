@@ -105,8 +105,11 @@ class GeminiAgent:
         self.user_id = user_id
         self.access_token = access_token
 
-    async def respond(self, user_message: str) -> str:
-        """Process a user message and return the assistant's response text."""
+    async def respond(
+        self, user_message: str, history: list[dict] | None = None
+    ) -> tuple[str, list[dict]]:
+        """Process a user message and return (response_text, updated_history)."""
+        history = history or []
         try:
             client = _get_client()
             async with multi_mcp_session(self.access_token, debug_http=settings.debug_mcp_http) as (tool_session, all_tools):
@@ -117,7 +120,11 @@ class GeminiAgent:
                     [d.name for d in gemini_tools[0].function_declarations],
                 )
 
-                contents: list = [user_message]
+                contents: list = [
+                    genai_types.Content(role=t["role"], parts=[genai_types.Part(text=t["text"])])
+                    for t in history
+                ]
+                contents.append(user_message)
                 response = None
 
                 for round_num in range(1, _MAX_TOOL_ROUNDS + 1):
@@ -200,9 +207,14 @@ class GeminiAgent:
                 exc_info=True,
             )
             try:
+                fallback_contents: list = [
+                    genai_types.Content(role=t["role"], parts=[genai_types.Part(text=t["text"])])
+                    for t in history
+                ]
+                fallback_contents.append(user_message)
                 response = await client.aio.models.generate_content(
                     model=settings.gemini_model,
-                    contents=user_message,
+                    contents=fallback_contents,
                     config=genai_types.GenerateContentConfig(
                         system_instruction=_SYSTEM_INSTRUCTION
                         + " Note: Workspace tools are temporarily unavailable.",
@@ -210,6 +222,11 @@ class GeminiAgent:
                 )
             except Exception as fallback_exc:
                 logger.error("Gemini fallback also failed for user=%s: %s", self.user_id, fallback_exc)
-                return "Sorry, I'm having trouble reaching the AI service right now. Please try again later."
+                raise fallback_exc
 
-        return (response.text if response else None) or "(no response)"
+        response_text = (response.text if response else None) or "(no response)"
+        updated_history = history + [
+            {"role": "user", "text": user_message},
+            {"role": "model", "text": response_text},
+        ]
+        return response_text, updated_history

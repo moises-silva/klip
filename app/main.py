@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from .chat_events import (
     handle_added_to_space,
+    handle_app_command,
     handle_card_clicked,
     handle_message,
     handle_removed_from_space,
@@ -43,6 +44,7 @@ if settings.debug_mcp_http:
 
 _EVENT_HANDLERS = {
     "ADDED_TO_SPACE": handle_added_to_space,
+    "APP_COMMAND": handle_app_command,
     "MESSAGE": handle_message,
     "CARD_CLICKED": handle_card_clicked,
     "REMOVED_FROM_SPACE": handle_removed_from_space,
@@ -141,4 +143,6 @@ def _detect_event_type(body: dict) -> str:
         return "REMOVED_FROM_SPACE"
     if "buttonClickedPayload" in chat:
         return "CARD_CLICKED"
+    if "appCommandPayload" in chat:
+        return "APP_COMMAND"
     return ""

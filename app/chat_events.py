@@ -3,6 +3,7 @@ import logging
 import random
 
 from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_pending_message, save_user_context
+from .history import clear_history, load_history, save_history
 from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
 from .config import settings
@@ -27,16 +28,28 @@ def _space_name(event: dict) -> str:
     chat = _chat(event)
     space = (
         chat.get("messagePayload", {}).get("space")
-        or chat.get("addedToSpacePayload", {}).get("space", {})
+        or chat.get("addedToSpacePayload", {}).get("space")
+        or chat.get("appCommandPayload", {}).get("space", {})
     )
     return space.get("name", "")
+
+def _slash_command_id(event: dict) -> int | None:
+    cmd = _chat(event).get("messagePayload", {}).get("message", {}).get("slashCommand", {})
+    return cmd.get("commandId")
 
 def _config_redirect_uri(event: dict) -> str:
     chat = _chat(event)
     return (
         chat.get("messagePayload", {}).get("configCompleteRedirectUri")
-        or chat.get("addedToSpacePayload", {}).get("configCompleteRedirectUri", "")
+        or chat.get("addedToSpacePayload", {}).get("configCompleteRedirectUri")
+        or chat.get("appCommandPayload", {}).get("configCompleteRedirectUri", "")
     )
+
+
+def _app_command_id(event: dict) -> int | None:
+    meta = _chat(event).get("appCommandPayload", {}).get("appCommandMetadata", {})
+    cmd_id = meta.get("appCommandId")
+    return int(cmd_id) if cmd_id is not None else None
 
 
 async def _save_context(event: dict) -> None:
@@ -80,10 +93,17 @@ async def _run_and_reply(
     if message_name:
         updater_task = asyncio.create_task(_phrase_updater(message_name, stop))
 
+    history: list[dict] = []
+    try:
+        history = await load_history(user_id)
+    except Exception as exc:
+        logger.warning("Failed to load history for user=%s: %s", user_id, exc)
+
     result: str | dict | None = None
+    updated_history: list[dict] | None = None
     try:
         async with asyncio.timeout(settings.gemini_timeout):
-            result = await agent.respond(text)
+            result, updated_history = await agent.respond(text, history)
     except InsufficientScopesError:
         logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
         await save_pending_message(user_id, text)
@@ -99,6 +119,12 @@ async def _run_and_reply(
         stop.set()
         if updater_task:
             await updater_task
+
+    if updated_history is not None:
+        try:
+            await save_history(user_id, updated_history)
+        except Exception as exc:
+            logger.warning("Failed to save history for user=%s: %s", user_id, exc)
 
     if not result:
         return
@@ -118,11 +144,18 @@ async def _run_and_reply(
         logger.error("Failed to post async reply to space=%s: %s", space, exc)
 
 
+_COMMAND_FORGET_HISTORY = 1
+
+
 async def handle_message(event: dict) -> dict:
     user_id = _user_id(event)
     text = _message_text(event)
     logger.info("MESSAGE user=%s text=%.100s", user_id, text)
     await _save_context(event)
+
+    if _slash_command_id(event) == _COMMAND_FORGET_HISTORY:
+        await clear_history(user_id)
+        return text_response("Done! I've forgotten our conversation history.")
 
     if not await is_authorized(user_id):
         auth_url = await get_auth_url(user_id)
@@ -146,6 +179,20 @@ async def handle_message(event: dict) -> dict:
         logger.error("Failed to create thinking card for user=%s: %s", user_id, exc)
 
     asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name))
+    return {}
+
+
+async def handle_app_command(event: dict) -> dict:
+    user_id = _user_id(event)
+    cmd_id = _app_command_id(event)
+    logger.info("APP_COMMAND id=%s user=%s", cmd_id, user_id)
+    await _save_context(event)
+
+    if cmd_id == _COMMAND_FORGET_HISTORY:
+        await clear_history(user_id)
+        return text_response("Done! I've forgotten our conversation history.")
+
+    logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
 
 
