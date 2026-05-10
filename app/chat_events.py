@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 
-from .auth import get_auth_url, get_fresh_access_token, is_authorized, save_pending_message, save_user_context
+from .auth import get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
 from .history import clear_history, load_history, save_history
 from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
@@ -20,6 +20,9 @@ def _user_id(event: dict) -> str:
 
 def _user_email(event: dict) -> str:
     return _chat(event).get("user", {}).get("email", "")
+
+def _display_name(event: dict) -> str:
+    return _chat(event).get("user", {}).get("displayName", "")
 
 def _message_text(event: dict) -> str:
     return _chat(event).get("messagePayload", {}).get("message", {}).get("text", "").strip()
@@ -58,8 +61,9 @@ async def _save_context(event: dict) -> None:
     space = _space_name(event)
     redirect_uri = _config_redirect_uri(event)
     email = _user_email(event)
+    name = _display_name(event)
     if space:
-        await save_user_context(user_id, space, redirect_uri, email)
+        await save_user_context(user_id, space, redirect_uri, email, name)
 
 
 async def handle_added_to_space(event: dict) -> dict:
@@ -167,7 +171,7 @@ async def handle_message(event: dict) -> dict:
         return welcome_card(auth_url)
 
     space = _space_name(event)
-    agent = GeminiAgent(user_id, access_token)
+    agent = GeminiAgent(user_id, access_token, _user_email(event), _display_name(event))
 
     # Create the thinking card now so it appears immediately when the sync response
     # completes. The background task then updates it in place as Gemini works.
@@ -215,7 +219,8 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
         logger.error("Cannot replay message for user=%s: no access token after re-auth", user_id)
         return
 
-    agent = GeminiAgent(user_id, access_token)
+    user_info = await get_user_info(user_id)
+    agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""))
 
     message_name = None
     try:

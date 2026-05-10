@@ -9,6 +9,7 @@ integration) so that:
   - Duplicate tools from the MCP server are deduplicated.
 """
 import logging
+from datetime import datetime, timezone
 
 import google.genai as genai
 import httpx
@@ -54,12 +55,15 @@ def _find_scope_error(exc: BaseException) -> InsufficientScopesError | None:
     return None
 
 
-_SYSTEM_INSTRUCTION = (
-    "You are Klip, a Google Workspace personal assistant. "
-    "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
-    "Help the user with their Google Chat conversations and Workspace data "
-    "using the available tools. Be concise and helpful."
-)
+def _build_system_instruction(user_email: str = "", display_name: str = "") -> str:
+    now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %H:%M UTC")
+    user_line = f"You are assisting {display_name} ({user_email})." if user_email else ""
+    return (
+        "You are Klip, a Google Workspace personal assistant. "
+        "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
+        "Help the user with their Google Workspace data using the available tools. Be concise and helpful. "
+        f"Today is {now}. {user_line}"
+    )
 
 _MAX_TOOL_ROUNDS = 10
 
@@ -101,9 +105,11 @@ class GeminiAgent:
     Model is set by the operator via GEMINI_MODEL env var (default: gemini-2.0-flash).
     """
 
-    def __init__(self, user_id: str, access_token: str):
+    def __init__(self, user_id: str, access_token: str, user_email: str = "", display_name: str = ""):
         self.user_id = user_id
         self.access_token = access_token
+        self.user_email = user_email
+        self.display_name = display_name
 
     async def respond(
         self, user_message: str, history: list[dict] | None = None
@@ -132,7 +138,7 @@ class GeminiAgent:
                         model=settings.gemini_model,
                         contents=contents,
                         config=genai_types.GenerateContentConfig(
-                            system_instruction=_SYSTEM_INSTRUCTION,
+                            system_instruction=_build_system_instruction(self.user_email, self.display_name),
                             tools=gemini_tools,
                         ),
                     )
@@ -216,8 +222,9 @@ class GeminiAgent:
                     model=settings.gemini_model,
                     contents=fallback_contents,
                     config=genai_types.GenerateContentConfig(
-                        system_instruction=_SYSTEM_INSTRUCTION
+                        system_instruction=_build_system_instruction(self.user_email, self.display_name)
                         + " Note: Workspace tools are temporarily unavailable.",
+                        tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
                     ),
                 )
             except Exception as fallback_exc:
