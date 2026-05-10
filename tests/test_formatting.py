@@ -88,11 +88,27 @@ def test_numbered_list_multiple():
     assert md_to_chat(text) == "- Alpha\n- Beta\n- Gamma"
 
 def test_asterisk_bullet_converted_to_hyphen():
-    # * bullets are converted to - to avoid bold/list asterisk ambiguity in Chat.
     assert md_to_chat("* item") == "- item"
 
 def test_hyphen_bullet_unchanged():
     assert md_to_chat("- item") == "- item"
+
+def test_sub_bullet_asterisk_indented():
+    # Gemini uses 2-space indent for sub-bullets; we expand to 4.
+    text = "* top\n  * sub"
+    assert md_to_chat(text) == "- top\n    - sub"
+
+def test_sub_bullet_hyphen_indented():
+    text = "- top\n  - sub"
+    assert md_to_chat(text) == "- top\n    - sub"
+
+def test_three_level_nesting():
+    text = "- top\n  - mid\n    - deep"
+    assert md_to_chat(text) == "- top\n    - mid\n        - deep"
+
+def test_nested_list_with_bold():
+    text = "* **Section**\n  * **sub-item**"
+    assert md_to_chat(text) == "- *Section*\n    - *sub-item*"
 
 
 # --- code protection ---

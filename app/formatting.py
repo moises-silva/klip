@@ -21,6 +21,7 @@ def md_to_chat(text: str) -> str:
       user@host      → <mailto:user@host|user@host>
       # Heading      → *Heading*  (all heading levels become bold)
       * item         → - item     (asterisk bullets → hyphen to avoid bold ambiguity)
+        * sub-item   →     - sub-item  (sub-bullets indented to 4 spaces per level)
       1. item        → - item     (numbered lists become bullets)
     """
     placeholders: dict[str, str] = {}
@@ -37,9 +38,14 @@ def md_to_chat(text: str) -> str:
     text = re.sub(r"```[\s\S]*?```", protect, text)
     text = re.sub(r"`[^`\n]+`", protect, text)
 
-    # Bullet lists: normalize * bullets to - BEFORE bold conversion to avoid asterisk
-    # ambiguity. "* **bold**" would otherwise become "* *bold*" which Chat misparses.
-    text = re.sub(r"^\*\s+", "- ", text, flags=re.MULTILINE)
+    # Bullet lists: convert * to - and normalize indentation to 4 spaces per level.
+    # Must run BEFORE bold conversion to avoid asterisk ambiguity ("* *bold*").
+    # Gemini uses 2-space indentation; we expand to 4 so sub-bullets are visible in Chat.
+    def _bullet(m: re.Match) -> str:
+        level = len(m.group(1)) // 2
+        return "    " * level + "- "
+
+    text = re.sub(r"^( *)[*-]\s+", _bullet, text, flags=re.MULTILINE)
 
     # Links: [text](url) → <url|text>
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"<\2|\1>", text)
@@ -62,8 +68,12 @@ def md_to_chat(text: str) -> str:
     # Headers: ## Heading → *Heading*
     text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
 
-    # Numbered lists: "1. item" → "- item"
-    text = re.sub(r"^\d+\.\s+", "- ", text, flags=re.MULTILINE)
+    # Numbered lists: "1. item" / "  1. sub" → same hyphen-bullet treatment.
+    def _numbered(m: re.Match) -> str:
+        level = len(m.group(1)) // 2
+        return "    " * level + "- "
+
+    text = re.sub(r"^( *)\d+\.\s+", _numbered, text, flags=re.MULTILINE)
 
     for key, val in placeholders.items():
         text = text.replace(key, val)
