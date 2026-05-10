@@ -47,6 +47,20 @@ def test_link_multiple():
 def test_bare_url_unchanged():
     assert md_to_chat("Visit https://example.com now") == "Visit https://example.com now"
 
+def test_link_with_backtick_url():
+    # Gemini sometimes writes the URL in backticks; backticks must be stripped
+    # from the URL or Chat encodes them as %60 and breaks the link.
+    src = "[`https://example.com`](`https://example.com`)"
+    assert md_to_chat(src) == "<https://example.com|https://example.com>"
+
+def test_link_with_backtick_display_only():
+    src = "[`docs`](https://example.com)"
+    assert md_to_chat(src) == "<https://example.com|docs>"
+
+def test_link_with_backtick_url_only():
+    src = "[docs](`https://example.com`)"
+    assert md_to_chat(src) == "<https://example.com|docs>"
+
 def test_bare_email_converted_to_gmail_compose():
     result = md_to_chat("from moy@example.com today")
     assert result == "from <https://mail.google.com/mail/?view=cm&to=moy@example.com|moy@example.com> today"
@@ -115,6 +129,21 @@ def test_nested_list_with_bold():
 
 def test_inline_code_not_transformed():
     assert md_to_chat("`**not bold**`") == "`**not bold**`"
+
+def test_bare_url_in_code_span():
+    # Gemini writes bare URLs in backticks; Chat auto-detects the URL but includes
+    # the trailing backtick in the href, producing %60. Convert to a Chat link.
+    result = md_to_chat("Links to `https://modelcontextprotocol.io/docs/learn/architecture`")
+    assert result == "Links to <https://modelcontextprotocol.io/docs/learn/architecture|https://modelcontextprotocol.io/docs/learn/architecture>"
+
+def test_bare_url_in_code_span_not_double_wrapped():
+    # A [`url`](`url`) pattern is handled by the link path; the URL-in-code-span
+    # pass should not fire again on the result.
+    src = "[`https://example.com`](`https://example.com`)"
+    assert md_to_chat(src) == "<https://example.com|https://example.com>"
+
+def test_code_span_non_url_preserved():
+    assert md_to_chat("`some_function()`") == "`some_function()`"
 
 def test_code_block_not_transformed():
     text = "```\n**not bold** ~~not strike~~\n```"

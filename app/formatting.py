@@ -78,4 +78,16 @@ def md_to_chat(text: str) -> str:
     for key, val in placeholders.items():
         text = text.replace(key, val)
 
+    # Strip backtick wrappers from Chat link URLs and display text.
+    # Gemini sometimes writes [`url`](`url`); after placeholder restoration the
+    # backticks land inside <url|display>, making the URL invalid (%60 encoding).
+    text = re.sub(r"<`([^`|>]+)`\|([^>]*)>", r"<\1|\2>", text)  # backtick URL
+    text = re.sub(r"<([^|>]*)\|`([^`>]*)`>", r"<\1|\2>", text)  # backtick display
+
+    # Bare URL in an inline code span: `https://url` → <url|url>
+    # Runs after restoration so it catches spans not consumed by link processing.
+    # Chat auto-detects URLs inside backtick spans but includes the trailing backtick
+    # in the href, producing %60 at the end.
+    text = re.sub(r"`(https?://[^`\s]+)`", r"<\1|\1>", text)
+
     return text
