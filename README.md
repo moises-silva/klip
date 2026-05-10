@@ -228,15 +228,18 @@ ______________________________________________________________________
 
 See `.env.example` for the full list with descriptions.
 
-| Variable | Required | Notes | |----------|----------|-------| | `GCP_PROJECT` | Yes | GCP project
-ID | | `REGION` | No | Defaults to `us-central1` | | `GEMINI_MODEL` | No | Defaults to
-`gemini-2.5-flash` | | `OAUTH_CLIENT_ID` | Yes | From Cloud Console credentials | |
-`OAUTH_CLIENT_SECRET` | Yes | From Cloud Console credentials (use Secret Manager in Cloud Run) | |
-`APP_BASE_URL` | Yes | Public base URL, no trailing slash | | `ADDON_AUDIENCE` | Yes |
-`APP_BASE_URL/events` | | `ADDON_TOKEN_ISSUER` | Yes |
-`service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com` | | `VERIFY_ADDON_TOKENS` |
-No | Defaults to `true`. Always `true` in production. | | `DEBUG_GEMINI` | No | Set to `true` for
-verbose Gemini SDK and MCP transport logs |
+| Variable              | Required | Notes                                                                  |
+| --------------------- | -------- | ---------------------------------------------------------------------- |
+| `GCP_PROJECT`         | Yes      | GCP project ID                                                         |
+| `REGION`              | No       | Defaults to `us-central1`                                              |
+| `GEMINI_MODEL`        | No       | Defaults to `gemini-2.5-flash`                                         |
+| `OAUTH_CLIENT_ID`     | Yes      | From Cloud Console credentials                                         |
+| `OAUTH_CLIENT_SECRET` | Yes      | From Cloud Console credentials (use Secret Manager in Cloud Run)       |
+| `APP_BASE_URL`        | Yes      | Public base URL, no trailing slash                                     |
+| `ADDON_AUDIENCE`      | Yes      | `APP_BASE_URL/events`                                                  |
+| `ADDON_TOKEN_ISSUER`  | Yes      | `service-{PROJECT_NUMBER}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com` |
+| `VERIFY_ADDON_TOKENS` | No       | Defaults to `true`. Always `true` in production.                       |
+| `DEBUG_GEMINI`        | No       | Set to `true` for verbose Gemini SDK and MCP transport logs            |
 
 ## Testing the MCP connection
 

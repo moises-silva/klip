@@ -1,1 +1,2 @@
 mdformat>=1.0
+mdformat-gfm>=0.4
