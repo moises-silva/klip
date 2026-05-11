@@ -6,7 +6,7 @@ import time
 
 from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
 from .history import clear_history, load_history, save_history
-from .cards import THINKING_PHRASES, reauth_card, text_response, thinking_card, welcome_card
+from .cards import THINKING_PHRASES, reauth_card, settings_dialog, settings_dialog_ok, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
 from .formatting import md_to_chat
 from .config import settings
@@ -178,6 +178,7 @@ async def _run_and_reply(
 
 _COMMAND_FORGET_HISTORY = 1
 _COMMAND_RESET = 2
+_COMMAND_SETTINGS = 3
 
 
 async def handle_message(event: dict) -> dict:
@@ -230,13 +231,29 @@ async def handle_app_command(event: dict) -> dict:
         await delete_user(user_id)
         return text_response("You have been forgotten. 🫧 It's like we never met. Say hello to start fresh!")
 
+    if cmd_id == _COMMAND_SETTINGS:
+        return settings_dialog()
+
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
 
 
 async def handle_card_clicked(event: dict) -> dict:
-    action = _chat(event).get("buttonClickedPayload", {}).get("action", {}).get("actionMethodName", "")
-    logger.info("CARD_CLICKED action=%s user=%s", action, _user_id(event))
+    payload = _chat(event).get("buttonClickedPayload", {})
+    action = payload.get("action", {}).get("actionMethodName", "")
+    is_dialog = payload.get("isDialogEvent", False)
+    dialog_event_type = payload.get("dialogEventType", "")
+    logger.info(
+        "CARD_CLICKED action=%s user=%s is_dialog=%s dialog_event_type=%s",
+        action, _user_id(event), is_dialog, dialog_event_type,
+    )
+
+    action_name = event.get("commonEventObject", {}).get("parameters", {}).get("actionName", "")
+    if action_name == "save_settings":
+        form_inputs = event.get("commonEventObject", {}).get("formInputs", {})
+        logger.info("Dialog save_settings user=%s inputs=%s", _user_id(event), form_inputs)
+        return settings_dialog_ok()
+
     return {}
 
 

@@ -213,3 +213,59 @@ def reauth_card(auth_url: str) -> dict:
 
 def text_response(message: str) -> dict:
     return _chat_action({"text": message})
+
+
+def settings_dialog() -> dict:
+    """Dialog opened by the /settings quick command. Simple test form."""
+    return {
+        "action": {
+            "navigations": [
+                {
+                    "pushCard": {
+                        "header": {"title": "Klip Settings"},
+                        "sections": [
+                            {
+                                "widgets": [
+                                    {
+                                        "textInput": {
+                                            "name": "test_field",
+                                            "label": "Test field",
+                                            "type": "SINGLE_LINE",
+                                            "hintText": "Enter some text",
+                                        }
+                                    },
+                                    {
+                                        "buttonList": {
+                                            "buttons": [
+                                                {
+                                                    "text": "Save",
+                                                    "onClick": {
+                                                        "action": {
+                                                            "function": f"{settings.app_base_url}/events",
+                                                            "parameters": [
+                                                                {"key": "actionName", "value": "save_settings"}
+                                                            ],
+                                                        }
+                                                    },
+                                                }
+                                            ]
+                                        }
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+    }
+
+
+def settings_dialog_ok() -> dict:
+    """Response to a SUBMIT_DIALOG — shows a notification and closes the dialog."""
+    return {
+        "action": {
+            "navigations": [{"endNavigation": {"action": "CLOSE_DIALOG"}}],
+            "notification": {"text": "Settings received!"},
+        }
+    }
