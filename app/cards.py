@@ -257,8 +257,21 @@ def settings_dialog(
                         "header": {"title": "Settings"},
                         "sections": [
                             {
-                                "header": "Workspace Services",
                                 "widgets": [
+                                    {
+                                        "textParagraph": {
+                                            "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
+                                        }
+                                    }
+                                ],
+                            },
+                            {
+                                "widgets": [
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Workspace Services</b>"
+                                        }
+                                    },
                                     {
                                         "selectionInput": {
                                             "name": "mcp_servers",
@@ -280,8 +293,8 @@ def settings_dialog(
                             *(
                                 [
                                     {
-                                        "header": "Debug",
                                         "widgets": [
+                                            {"textParagraph": {"text": "<b>Debug</b>"}},
                                             {
                                                 "selectionInput": {
                                                     "name": "debug_chat",
@@ -321,11 +334,6 @@ def settings_dialog(
                                                     },
                                                 }
                                             ]
-                                        }
-                                    },
-                                    {
-                                        "textParagraph": {
-                                            "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
                                         }
                                     },
                                 ],
