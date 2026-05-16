@@ -102,27 +102,33 @@ async def save_pending_message(user_id: str, text: str) -> None:
 
 
 async def save_user_context(
-    user_id: str, space_name: str, config_redirect_uri: str, email: str = "", display_name: str = ""
+    user_id: str, space_name: str, config_redirect_uri: str, email: str = "", display_name: str = "", timezone: str = ""
 ) -> None:
-    """Persist the user's DM space, email, display name, and configCompleteRedirectUri before OAuth."""
+    """Persist the user's DM space, email, display name, timezone, and configCompleteRedirectUri before OAuth."""
     db = _get_db()
     data = {"space_name": space_name, "config_redirect_uri": config_redirect_uri}
     if email:
         data["email"] = email
     if display_name:
         data["display_name"] = display_name
+    if timezone:
+        data["timezone"] = timezone
     await db.collection("users").document(_doc_id(user_id)).set(data, merge=True)
-    logger.info("Saved context for user=%s space=%s email=%s", user_id, space_name, email)
+    logger.info("Saved context for user=%s space=%s email=%s timezone=%s", user_id, space_name, email, timezone)
 
 
 async def get_user_info(user_id: str) -> dict:
-    """Return stored email and display_name for a user."""
+    """Return stored email, display_name, and timezone for a user."""
     db = _get_db()
     doc = await db.collection("users").document(_doc_id(user_id)).get()
     if not doc.exists:
         return {}
     data = doc.to_dict()
-    return {"email": data.get("email", ""), "display_name": data.get("display_name", "")}
+    return {
+        "email": data.get("email", ""),
+        "display_name": data.get("display_name", ""),
+        "timezone": data.get("timezone", ""),
+    }
 
 
 async def get_user_settings(user_id: str) -> dict:

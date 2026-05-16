@@ -11,6 +11,7 @@ integration) so that:
 import logging
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import google.genai as genai
 import httpx
@@ -66,8 +67,12 @@ _SERVER_LABELS = {
 }
 
 
-def _build_system_instruction(user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None) -> str:
-    now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %H:%M UTC")
+def _build_system_instruction(user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None, user_timezone: str = "") -> str:
+    try:
+        tz = ZoneInfo(user_timezone) if user_timezone else timezone.utc
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    now = datetime.now(tz).strftime("%A, %B %d, %Y at %H:%M %Z")
     user_line = f"You are assisting {display_name} ({user_email})." if user_email else ""
     keys = enabled_mcp_servers if enabled_mcp_servers is not None else list(_SERVER_LABELS)
     services = [_SERVER_LABELS[k] for k in keys if k in _SERVER_LABELS]
@@ -106,10 +111,17 @@ def _get_client() -> genai.Client:
     return _client
 
 
+_BUILTIN_TOOL = genai_types.FunctionDeclaration(
+    name="get_current_time",
+    description="Returns the current date and time in the user's local timezone. Use this whenever the user asks about the current time, date, or day.",
+    parameters_json_schema={"type": "object", "properties": {}},
+)
+
+
 def _mcp_tools_to_gemini(mcp_tools) -> list[genai_types.Tool]:
     """Convert MCP tool list to Gemini FunctionDeclarations using raw JSON Schema."""
     seen: set[str] = set()
-    declarations = []
+    declarations = [_BUILTIN_TOOL]
     for tool in mcp_tools:
         if tool.name in seen:
             continue
@@ -130,12 +142,13 @@ class GeminiAgent:
     Model is set by the operator via GEMINI_MODEL env var (default: gemini-2.0-flash).
     """
 
-    def __init__(self, user_id: str, access_token: str, user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None):
+    def __init__(self, user_id: str, access_token: str, user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None, user_timezone: str = ""):
         self.user_id = user_id
         self.access_token = access_token
         self.user_email = user_email
         self.display_name = display_name
         self.enabled_mcp_servers = enabled_mcp_servers
+        self.user_timezone = user_timezone
 
     async def respond(
         self, user_message: str, history: list[dict] | None = None
@@ -165,7 +178,7 @@ class GeminiAgent:
                         model=settings.gemini_model,
                         contents=contents,
                         config=genai_types.GenerateContentConfig(
-                            system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers),
+                            system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers, self.user_timezone),
                             tools=gemini_tools,
                         ),
                     )
@@ -198,6 +211,18 @@ class GeminiAgent:
                     response_parts = []
                     for fc in function_calls:
                         args = dict(fc.args) if fc.args else {}
+
+                        if fc.name == "get_current_time":
+                            try:
+                                tz = ZoneInfo(self.user_timezone) if self.user_timezone else timezone.utc
+                            except ZoneInfoNotFoundError:
+                                tz = timezone.utc
+                            current_time = datetime.now(tz).strftime("%A, %B %d, %Y at %H:%M %Z")
+                            logger.info("Built-in tool get_current_time → %s", current_time)
+                            tool_records.append({"name": fc.name, "duration_ms": 0, "args": {}, "response_preview": current_time, "is_error": False})
+                            response_parts.append(genai_types.Part.from_function_response(name=fc.name, response={"result": current_time}))
+                            continue
+
                         bound = tool_session.get(fc.name)
                         if bound is None:
                             logger.warning("Gemini called unknown/disabled tool=%s, returning error to model", fc.name)
@@ -274,7 +299,7 @@ class GeminiAgent:
                     model=settings.gemini_model,
                     contents=fallback_contents,
                     config=genai_types.GenerateContentConfig(
-                        system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers)
+                        system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers, self.user_timezone)
                         + " Note: Workspace tools are temporarily unavailable.",
                         tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
                     ),

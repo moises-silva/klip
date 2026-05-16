@@ -27,6 +27,9 @@ def _user_email(event: dict) -> str:
 def _display_name(event: dict) -> str:
     return _chat(event).get("user", {}).get("displayName", "")
 
+def _user_timezone(event: dict) -> str:
+    return event.get("commonEventObject", {}).get("timeZone", {}).get("id", "")
+
 def _message_text(event: dict) -> str:
     return _chat(event).get("messagePayload", {}).get("message", {}).get("text", "").strip()
 
@@ -65,8 +68,9 @@ async def _save_context(event: dict) -> None:
     redirect_uri = _config_redirect_uri(event)
     email = _user_email(event)
     name = _display_name(event)
+    timezone = _user_timezone(event)
     if space:
-        await save_user_context(user_id, space, redirect_uri, email, name)
+        await save_user_context(user_id, space, redirect_uri, email, name, timezone)
 
 
 async def handle_added_to_space(event: dict) -> dict:
@@ -204,7 +208,8 @@ async def handle_message(event: dict) -> dict:
     space = _space_name(event)
     user_settings = await get_user_settings(user_id)
     agent = GeminiAgent(user_id, access_token, _user_email(event), _display_name(event),
-                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"))
+                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
+                        user_timezone=_user_timezone(event))
 
     # Create the thinking card now so it appears immediately when the sync response
     # completes. The background task then updates it in place as Gemini works.
@@ -284,7 +289,8 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
     user_info = await get_user_info(user_id)
     user_settings = await get_user_settings(user_id)
     agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""),
-                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"))
+                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
+                        user_timezone=user_info.get("timezone", ""))
 
     message_name = None
     thread_name = None
