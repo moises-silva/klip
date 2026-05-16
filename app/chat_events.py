@@ -258,6 +258,7 @@ async def handle_card_clicked(event: dict) -> dict:
         selected = form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
         logger.info("Dialog save_settings user=%s enabled_servers=%s", _user_id(event), selected)
         await save_user_settings(_user_id(event), {"enabled_mcp_servers": selected})
+        await clear_history(_user_id(event))
         return settings_dialog_ok()
 
     return {}

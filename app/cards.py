@@ -235,10 +235,10 @@ def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
             "navigations": [
                 {
                     "pushCard": {
-                        "header": {"title": "Klip Settings"},
+                        "header": {"title": "Settings"},
                         "sections": [
                             {
-                                "header": "Workspace services",
+                                "header": "Workspace Services",
                                 "widgets": [
                                     {
                                         "selectionInput": {
@@ -272,6 +272,11 @@ def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
                                             ]
                                         }
                                     },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<i>Note: saving settings resets Klips memory of previous conversations.</i>"
+                                        }
+                                    },
                                 ],
                             }
                         ],
@@ -287,6 +292,6 @@ def settings_dialog_ok() -> dict:
     return {
         "action": {
             "navigations": [{"endNavigation": {"action": "CLOSE_DIALOG"}}],
-            "notification": {"text": "Settings received!"},
+            "notification": {"text": "Settings saved!"},
         }
     }

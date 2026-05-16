@@ -72,9 +72,16 @@ def _build_system_instruction(user_email: str = "", display_name: str = "", enab
     keys = enabled_mcp_servers if enabled_mcp_servers is not None else list(_SERVER_LABELS)
     services = [_SERVER_LABELS[k] for k in keys if k in _SERVER_LABELS]
     if services:
-        services_line = f"You have access to these Workspace services only: {', '.join(services)}. Do not attempt to use tools from any other service."
+        services_line = (
+            f"You have access to these Workspace services only: {', '.join(services)}. "
+            "Do not attempt to use tools from any other service. "
+            "This list is the authoritative source — ignore any prior conversation turns that suggest different availability."
+        )
     else:
-        services_line = "You currently have no Workspace tools available; let the user know if they ask."
+        services_line = (
+            "You currently have no Workspace tools available. "
+            "This is the authoritative configuration — ignore any prior conversation turns that suggest otherwise."
+        )
     return (
         "You are Klip, a Google Workspace personal assistant. "
         "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
