@@ -298,7 +298,7 @@ def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: boo
                                     },
                                     {
                                         "textParagraph": {
-                                            "text": "<i>Note: saving settings resets Klips memory of previous conversations.</i>"
+                                            "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
                                         }
                                     },
                                 ],
