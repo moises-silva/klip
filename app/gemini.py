@@ -57,13 +57,29 @@ def _find_scope_error(exc: BaseException) -> InsufficientScopesError | None:
     return None
 
 
-def _build_system_instruction(user_email: str = "", display_name: str = "") -> str:
+_SERVER_LABELS = {
+    "chat": "Google Chat",
+    "people": "Google Contacts",
+    "gmail": "Gmail",
+    "calendar": "Google Calendar",
+    "drive": "Google Drive",
+}
+
+
+def _build_system_instruction(user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None) -> str:
     now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %H:%M UTC")
     user_line = f"You are assisting {display_name} ({user_email})." if user_email else ""
+    keys = enabled_mcp_servers if enabled_mcp_servers is not None else list(_SERVER_LABELS)
+    services = [_SERVER_LABELS[k] for k in keys if k in _SERVER_LABELS]
+    if services:
+        services_line = f"You have access to these Workspace services only: {', '.join(services)}. Do not attempt to use tools from any other service."
+    else:
+        services_line = "You currently have no Workspace tools available; let the user know if they ask."
     return (
         "You are Klip, a Google Workspace personal assistant. "
         "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
         "Help the user with their Google Workspace data using the available tools. Be concise and helpful. "
+        f"{services_line} "
         f"Today is {now}. {user_line}"
     )
 
@@ -142,7 +158,7 @@ class GeminiAgent:
                         model=settings.gemini_model,
                         contents=contents,
                         config=genai_types.GenerateContentConfig(
-                            system_instruction=_build_system_instruction(self.user_email, self.display_name),
+                            system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers),
                             tools=gemini_tools,
                         ),
                     )
@@ -176,6 +192,16 @@ class GeminiAgent:
                     for fc in function_calls:
                         args = dict(fc.args) if fc.args else {}
                         bound = tool_session.get(fc.name)
+                        if bound is None:
+                            logger.warning("Gemini called unknown/disabled tool=%s, returning error to model", fc.name)
+                            tool_records.append({"name": fc.name, "duration_ms": 0, "args": args, "response_preview": "tool not available", "is_error": True})
+                            response_parts.append(
+                                genai_types.Part.from_function_response(
+                                    name=fc.name,
+                                    response={"error": f"Tool '{fc.name}' is not available."},
+                                )
+                            )
+                            continue
                         if settings.strip_unknown_tool_params:
                             known = set(bound.inputSchema.get("properties", {}).keys())
                             stripped = {k for k in args if k not in known}
@@ -241,7 +267,7 @@ class GeminiAgent:
                     model=settings.gemini_model,
                     contents=fallback_contents,
                     config=genai_types.GenerateContentConfig(
-                        system_instruction=_build_system_instruction(self.user_email, self.display_name)
+                        system_instruction=_build_system_instruction(self.user_email, self.display_name, self.enabled_mcp_servers)
                         + " Note: Workspace tools are temporarily unavailable.",
                         tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
                     ),
