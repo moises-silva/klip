@@ -108,7 +108,9 @@ async def events(request: Request):
         token = extract_bearer_token(auth_header)
         if not token:
             raise HTTPException(status_code=401, detail="Missing bearer token")
-        if not verify_addon_token(token, settings.addon_audience, settings.addon_token_issuer):
+        if not verify_addon_token(
+            token, settings.addon_audience, settings.addon_token_issuer
+        ):
             raise HTTPException(status_code=401, detail="Invalid token")
 
     try:

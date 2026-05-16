@@ -1,4 +1,5 @@
 """OAuth 2.0 flow and Firestore token store."""
+
 import asyncio
 import base64
 import json
@@ -95,14 +96,21 @@ async def delete_user(user_id: str) -> None:
 async def save_pending_message(user_id: str, text: str) -> None:
     """Persist the message that triggered a re-auth so it can be replayed after OAuth completes."""
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {"pending_message": text}, merge=True
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .set({"pending_message": text}, merge=True)
     )
     logger.info("Saved pending message for user=%s", user_id)
 
 
 async def save_user_context(
-    user_id: str, space_name: str, config_redirect_uri: str, email: str = "", display_name: str = "", timezone: str = ""
+    user_id: str,
+    space_name: str,
+    config_redirect_uri: str,
+    email: str = "",
+    display_name: str = "",
+    timezone: str = "",
 ) -> None:
     """Persist the user's DM space, email, display name, timezone, and configCompleteRedirectUri before OAuth."""
     db = _get_db()
@@ -114,7 +122,13 @@ async def save_user_context(
     if timezone:
         data["timezone"] = timezone
     await db.collection("users").document(_doc_id(user_id)).set(data, merge=True)
-    logger.info("Saved context for user=%s space=%s email=%s timezone=%s", user_id, space_name, email, timezone)
+    logger.info(
+        "Saved context for user=%s space=%s email=%s timezone=%s",
+        user_id,
+        space_name,
+        email,
+        timezone,
+    )
 
 
 async def get_user_info(user_id: str) -> dict:
@@ -143,8 +157,10 @@ async def get_user_settings(user_id: str) -> dict:
 async def save_user_settings(user_id: str, data: dict) -> None:
     """Persist user settings (merged into the existing user document)."""
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {"settings": data}, merge=True
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .set({"settings": data}, merge=True)
     )
     logger.info("Saved settings for user=%s", user_id)
 
@@ -168,8 +184,10 @@ async def get_auth_url(user_id: str) -> str:
     )
     if code_verifier:
         db = _get_db()
-        await db.collection("users").document(_doc_id(user_id)).set(
-            {"code_verifier": code_verifier}, merge=True
+        await (
+            db.collection("users")
+            .document(_doc_id(user_id))
+            .set({"code_verifier": code_verifier}, merge=True)
         )
     return auth_url
 
@@ -186,14 +204,20 @@ async def is_authorized(user_id: str) -> bool:
 async def store_tokens(user_id: str, credentials: Credentials) -> None:
     """Save OAuth tokens to the user's Firestore document."""
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {
-            "access_token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_expiry": credentials.expiry.isoformat() if credentials.expiry else None,
-            "authorized_at": datetime.now(timezone.utc).isoformat(),
-        },
-        merge=True,
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .set(
+            {
+                "access_token": credentials.token,
+                "refresh_token": credentials.refresh_token,
+                "token_expiry": credentials.expiry.isoformat()
+                if credentials.expiry
+                else None,
+                "authorized_at": datetime.now(timezone.utc).isoformat(),
+            },
+            merge=True,
+        )
     )
 
 
@@ -244,10 +268,13 @@ async def _send_authorized_message(space_name: str) -> None:
     try:
         service = _get_chat_service()
         await asyncio.to_thread(
-            service.spaces().messages().create(
+            service.spaces()
+            .messages()
+            .create(
                 parent=space_name,
                 body={"text": "You're all set! Go ahead and ask me anything."},
-            ).execute
+            )
+            .execute
         )
         logger.info("Sent authorization complete message to space=%s", space_name)
     except Exception as exc:
@@ -291,11 +318,19 @@ async def handle_oauth_callback(
         space_name = data.get("space_name")
         pending_message = data.get("pending_message")
         if pending_message and space_name:
-            await db.collection("users").document(_doc_id(user_id)).set(
-                {"pending_message": firestore.DELETE_FIELD}, merge=True
+            await (
+                db.collection("users")
+                .document(_doc_id(user_id))
+                .set({"pending_message": firestore.DELETE_FIELD}, merge=True)
             )
-            pending_replay = {"user_id": user_id, "space_name": space_name, "text": pending_message}
-            logger.info("Pending message found for user=%s, will replay after re-auth", user_id)
+            pending_replay = {
+                "user_id": user_id,
+                "space_name": space_name,
+                "text": pending_message,
+            }
+            logger.info(
+                "Pending message found for user=%s, will replay after re-auth", user_id
+            )
         elif space_name:
             await _send_authorized_message(space_name)
 

@@ -1,11 +1,17 @@
 include .env
 export
 
-.PHONY: deploy setup run dev test
+.PHONY: deploy setup run dev fmt lint test
 
 dev:
 	pip install -r requirements-dev.txt
 	git config core.hooksPath .githooks
+
+fmt:
+	ruff format app tests
+
+lint:
+	ruff check app tests
 
 test:
 	pytest tests/ -v

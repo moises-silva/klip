@@ -1,4 +1,5 @@
 """Firestore-backed per-user conversation history."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -38,23 +39,31 @@ async def save_history(user_id: str, turns: list[dict]) -> None:
     if len(turns) > MAX_TURNS:
         turns = turns[-MAX_TURNS:]
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {
-            "conversation": turns,
-            "conversation_updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        merge=True,
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .set(
+            {
+                "conversation": turns,
+                "conversation_updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            merge=True,
+        )
     )
 
 
 async def clear_history(user_id: str) -> None:
     """Delete the stored conversation history for a user."""
     db = _get_db()
-    await db.collection("users").document(_doc_id(user_id)).set(
-        {
-            "conversation": firestore.DELETE_FIELD,
-            "conversation_updated_at": firestore.DELETE_FIELD,
-        },
-        merge=True,
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .set(
+            {
+                "conversation": firestore.DELETE_FIELD,
+                "conversation_updated_at": firestore.DELETE_FIELD,
+            },
+            merge=True,
+        )
     )
     logger.info("Cleared conversation history for user=%s", user_id)

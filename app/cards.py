@@ -1,4 +1,5 @@
 """Card v2 response builders for Google Chat via the Workspace Add-ons framework."""
+
 from .config import settings
 
 THINKING_PHRASES = [
@@ -104,58 +105,57 @@ THINKING_PHRASES = [
     "Doing the math. There's a lot of math.",
 ]
 
+
 def _chat_action(message_body: dict) -> dict:
     """Wrap a Chat message in the Workspace Add-ons response envelope."""
     return {
         "hostAppDataAction": {
-            "chatDataAction": {
-                "createMessageAction": {
-                    "message": message_body
-                }
-            }
+            "chatDataAction": {"createMessageAction": {"message": message_body}}
         }
     }
 
 
 def welcome_card(auth_url: str) -> dict:
     """Shown on installation or when the user has not yet authorized."""
-    return _chat_action({
-        "text": (
-            "Hi! I'm Klip, your Google Workspace assistant. 👋\n\n"
-            "I can help you search conversations, summarize threads, find contacts, "
-            "and a whole lot more — but first I'll need permission to access your Workspace data. "
-            "It only takes a moment!"
-        ),
-        "cardsV2": [
-            {
-                "cardId": "auth-card",
-                "card": {
-                    "header": {
-                        "title": "Klip — Authorization Required",
-                        "subtitle": "Grant access to your Workspace data to get started.",
-                    },
-                    "sections": [
-                        {
-                            "widgets": [
-                                {
-                                    "buttonList": {
-                                        "buttons": [
-                                            {
-                                                "text": "Authorize Klip",
-                                                "onClick": {
-                                                    "openLink": {"url": auth_url}
-                                                },
-                                            }
-                                        ]
+    return _chat_action(
+        {
+            "text": (
+                "Hi! I'm Klip, your Google Workspace assistant. 👋\n\n"
+                "I can help you search conversations, summarize threads, find contacts, "
+                "and a whole lot more — but first I'll need permission to access your Workspace data. "
+                "It only takes a moment!"
+            ),
+            "cardsV2": [
+                {
+                    "cardId": "auth-card",
+                    "card": {
+                        "header": {
+                            "title": "Klip — Authorization Required",
+                            "subtitle": "Grant access to your Workspace data to get started.",
+                        },
+                        "sections": [
+                            {
+                                "widgets": [
+                                    {
+                                        "buttonList": {
+                                            "buttons": [
+                                                {
+                                                    "text": "Authorize Klip",
+                                                    "onClick": {
+                                                        "openLink": {"url": auth_url}
+                                                    },
+                                                }
+                                            ]
+                                        }
                                     }
-                                }
-                            ]
-                        }
-                    ],
-                },
-            }
-        ]
-    })
+                                ]
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+    )
 
 
 def thinking_card(phrase: str) -> dict:
@@ -171,7 +171,20 @@ def thinking_card(phrase: str) -> dict:
             }
         }
     else:
-        card = {"sections": [{"widgets": [{"decoratedText": {"text": f"<i>{phrase}</i>", "wrapText": False}}]}]}
+        card = {
+            "sections": [
+                {
+                    "widgets": [
+                        {
+                            "decoratedText": {
+                                "text": f"<i>{phrase}</i>",
+                                "wrapText": False,
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
     return {"cardsV2": [{"cardId": "thinking-card", "card": card}]}
 
 
@@ -197,7 +210,9 @@ def reauth_card(auth_url: str) -> dict:
                                         "buttons": [
                                             {
                                                 "text": "Re-authorize Klip",
-                                                "onClick": {"openLink": {"url": auth_url}},
+                                                "onClick": {
+                                                    "openLink": {"url": auth_url}
+                                                },
                                             }
                                         ]
                                     }
@@ -224,7 +239,9 @@ _MCP_SERVERS = [
 ]
 
 
-def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: bool = False) -> dict:
+def settings_dialog(
+    enabled_servers: list[str] | None = None, debug_enabled: bool = False
+) -> dict:
     """Dialog opened by the /settings quick command.
 
     enabled_servers: list of server keys currently enabled for this user.
@@ -251,7 +268,8 @@ def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: boo
                                                 {
                                                     "text": label,
                                                     "value": key,
-                                                    "selected": enabled_servers is None or key in enabled_servers,
+                                                    "selected": enabled_servers is None
+                                                    or key in enabled_servers,
                                                 }
                                                 for key, label in _MCP_SERVERS
                                             ],
@@ -259,24 +277,30 @@ def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: boo
                                     },
                                 ],
                             },
-                            *([{
-                                "header": "Debug",
-                                "widgets": [
+                            *(
+                                [
                                     {
-                                        "selectionInput": {
-                                            "name": "debug_chat",
-                                            "type": "CHECK_BOX",
-                                            "items": [
-                                                {
-                                                    "text": "Enable",
-                                                    "value": "true",
-                                                    "selected": debug_enabled,
+                                        "header": "Debug",
+                                        "widgets": [
+                                            {
+                                                "selectionInput": {
+                                                    "name": "debug_chat",
+                                                    "type": "CHECK_BOX",
+                                                    "items": [
+                                                        {
+                                                            "text": "Enable",
+                                                            "value": "true",
+                                                            "selected": debug_enabled,
+                                                        }
+                                                    ],
                                                 }
-                                            ],
-                                        }
-                                    },
-                                ],
-                            }] if settings.debug_chat else []),
+                                            },
+                                        ],
+                                    }
+                                ]
+                                if settings.debug_chat
+                                else []
+                            ),
                             {
                                 "widgets": [
                                     {
@@ -288,7 +312,10 @@ def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: boo
                                                         "action": {
                                                             "function": f"{settings.app_base_url}/events",
                                                             "parameters": [
-                                                                {"key": "actionName", "value": "save_settings"}
+                                                                {
+                                                                    "key": "actionName",
+                                                                    "value": "save_settings",
+                                                                }
                                                             ],
                                                         }
                                                     },

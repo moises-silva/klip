@@ -57,8 +57,11 @@ How do we make this App extensible (e.g plugins?) as a foundation to build on
 
 # Bugs
 
+- Only request the oauth scopes needed based on the services enabled in the App settings
+
 - It seems a prompt like "What is the latest email I have received?" causes two types of
   misbehavior.
+
   - Using gemini flash the model confuses the OrderBy parameter from the Chat tool search_messages
     with Gmail search_threads and injects the invalid parameter for search_threads.
   - Even once the invalid parameter is fixed (either using the new strip_unknown_tool_params option

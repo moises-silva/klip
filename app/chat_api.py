@@ -1,4 +1,5 @@
 """Bot-initiated Chat REST API calls using ADC (service account / Cloud Run identity)."""
+
 import asyncio
 import logging
 
@@ -18,7 +19,9 @@ def _get_bot_token() -> str:
     return creds.token
 
 
-async def create_message(space_name: str, body: dict, thread_name: str | None = None) -> tuple[str, str]:
+async def create_message(
+    space_name: str, body: dict, thread_name: str | None = None
+) -> tuple[str, str]:
     """Create a message in a Chat space and return (message_name, thread_name).
 
     Pass thread_name to post as a reply in an existing thread.

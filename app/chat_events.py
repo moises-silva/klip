@@ -4,10 +4,28 @@ import logging
 import random
 import time
 
-from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, get_user_settings, is_authorized, save_pending_message, save_user_context, save_user_settings
+from .auth import (
+    delete_user,
+    get_auth_url,
+    get_fresh_access_token,
+    get_user_info,
+    get_user_settings,
+    is_authorized,
+    save_pending_message,
+    save_user_context,
+    save_user_settings,
+)
 from .history import clear_history, load_history, save_history
-from .cards import THINKING_PHRASES, reauth_card, settings_dialog, settings_dialog_ok, text_response, thinking_card, welcome_card
-from .chat_api import create_message, post_message, update_message
+from .cards import (
+    THINKING_PHRASES,
+    reauth_card,
+    settings_dialog,
+    settings_dialog_ok,
+    text_response,
+    thinking_card,
+    welcome_card,
+)
+from .chat_api import create_message, update_message
 from .formatting import md_to_chat
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
@@ -18,20 +36,32 @@ logger = logging.getLogger(__name__)
 def _chat(event: dict) -> dict:
     return event.get("chat", {})
 
+
 def _user_id(event: dict) -> str:
     return _chat(event).get("user", {}).get("name", "unknown")
+
 
 def _user_email(event: dict) -> str:
     return _chat(event).get("user", {}).get("email", "")
 
+
 def _display_name(event: dict) -> str:
     return _chat(event).get("user", {}).get("displayName", "")
+
 
 def _user_timezone(event: dict) -> str:
     return event.get("commonEventObject", {}).get("timeZone", {}).get("id", "")
 
+
 def _message_text(event: dict) -> str:
-    return _chat(event).get("messagePayload", {}).get("message", {}).get("text", "").strip()
+    return (
+        _chat(event)
+        .get("messagePayload", {})
+        .get("message", {})
+        .get("text", "")
+        .strip()
+    )
+
 
 def _space_name(event: dict) -> str:
     chat = _chat(event)
@@ -42,9 +72,16 @@ def _space_name(event: dict) -> str:
     )
     return space.get("name", "")
 
+
 def _slash_command_id(event: dict) -> int | None:
-    cmd = _chat(event).get("messagePayload", {}).get("message", {}).get("slashCommand", {})
+    cmd = (
+        _chat(event)
+        .get("messagePayload", {})
+        .get("message", {})
+        .get("slashCommand", {})
+    )
     return cmd.get("commandId")
+
 
 def _config_redirect_uri(event: dict) -> str:
     chat = _chat(event)
@@ -97,8 +134,12 @@ async def _phrase_updater(message_name: str, stop: asyncio.Event) -> None:
 
 
 async def _run_and_reply(
-    agent: GeminiAgent, text: str, space: str, user_id: str,
-    message_name: str | None, thread_name: str | None = None,
+    agent: GeminiAgent,
+    text: str,
+    space: str,
+    user_id: str,
+    message_name: str | None,
+    thread_name: str | None = None,
     user_debug: bool = False,
 ) -> None:
     t_start = time.monotonic()
@@ -125,15 +166,21 @@ async def _run_and_reply(
             gemini_ms = int((time.monotonic() - t_gemini) * 1000)
             raw_result = result
     except InsufficientScopesError:
-        logger.warning("Insufficient OAuth scopes for user=%s, prompting re-auth", user_id)
+        logger.warning(
+            "Insufficient OAuth scopes for user=%s, prompting re-auth", user_id
+        )
         await save_pending_message(user_id, text)
         auth_url = await get_auth_url(user_id)
         result = reauth_card(auth_url)
     except TimeoutError:
-        logger.warning("Gemini timed out for user=%s after %ds", user_id, settings.gemini_timeout)
+        logger.warning(
+            "Gemini timed out for user=%s after %ds", user_id, settings.gemini_timeout
+        )
         result = "Sorry, that request took too long. Please try a simpler query."
     except Exception as exc:
-        logger.error("Background task failed for user=%s: %s", user_id, exc, exc_info=True)
+        logger.error(
+            "Background task failed for user=%s: %s", user_id, exc, exc_info=True
+        )
         result = "Sorry, something went wrong. Please try again."
     finally:
         stop.set()
@@ -149,7 +196,11 @@ async def _run_and_reply(
     if not result:
         return
 
-    body = result if isinstance(result, dict) else {"text": md_to_chat(result), "cardsV2": []}
+    body = (
+        result
+        if isinstance(result, dict)
+        else {"text": md_to_chat(result), "cardsV2": []}
+    )
 
     posted = False
     if message_name:
@@ -166,7 +217,13 @@ async def _run_and_reply(
         except Exception as exc:
             logger.error("Failed to post async reply to space=%s: %s", space, exc)
 
-    if settings.debug_chat and user_debug and posted and raw_result is not None and thread_name:
+    if (
+        settings.debug_chat
+        and user_debug
+        and posted
+        and raw_result is not None
+        and thread_name
+    ):
         total_ms = int((time.monotonic() - t_start) * 1000)
         debug_data = {
             "timing": {"total_ms": total_ms, "gemini_ms": gemini_ms},
@@ -176,7 +233,9 @@ async def _run_and_reply(
         }
         debug_json = json.dumps(debug_data, indent=2, ensure_ascii=False)
         try:
-            await create_message(space, {"text": f"```\n{debug_json}\n```"}, thread_name=thread_name)
+            await create_message(
+                space, {"text": f"```\n{debug_json}\n```"}, thread_name=thread_name
+            )
         except Exception as exc:
             logger.error("Failed to post debug message: %s", exc)
 
@@ -207,9 +266,14 @@ async def handle_message(event: dict) -> dict:
 
     space = _space_name(event)
     user_settings = await get_user_settings(user_id)
-    agent = GeminiAgent(user_id, access_token, _user_email(event), _display_name(event),
-                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
-                        user_timezone=_user_timezone(event))
+    agent = GeminiAgent(
+        user_id,
+        access_token,
+        _user_email(event),
+        _display_name(event),
+        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
+        user_timezone=_user_timezone(event),
+    )
 
     # Create the thinking card now so it appears immediately when the sync response
     # completes. The background task then updates it in place as Gemini works.
@@ -221,8 +285,17 @@ async def handle_message(event: dict) -> dict:
     except Exception as exc:
         logger.error("Failed to create thinking card for user=%s: %s", user_id, exc)
 
-    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name, thread_name,
-                                       user_debug=user_settings.get("debug_chat", False)))
+    asyncio.create_task(
+        _run_and_reply(
+            agent,
+            text,
+            space,
+            user_id,
+            message_name,
+            thread_name,
+            user_debug=user_settings.get("debug_chat", False),
+        )
+    )
     return {}
 
 
@@ -238,7 +311,9 @@ async def handle_app_command(event: dict) -> dict:
 
     if cmd_id == _COMMAND_RESET:
         await delete_user(user_id)
-        return text_response("You have been forgotten. 🫧 It's like we never met. Say hello to start fresh!")
+        return text_response(
+            "You have been forgotten. 🫧 It's like we never met. Say hello to start fresh!"
+        )
 
     if cmd_id == _COMMAND_SETTINGS:
         user_settings = await get_user_settings(user_id)
@@ -257,16 +332,32 @@ async def handle_card_clicked(event: dict) -> dict:
     dialog_event_type = payload.get("dialogEventType", "")
     logger.info(
         "CARD_CLICKED action=%s user=%s is_dialog=%s dialog_event_type=%s",
-        action, _user_id(event), is_dialog, dialog_event_type,
+        action,
+        _user_id(event),
+        is_dialog,
+        dialog_event_type,
     )
 
-    action_name = event.get("commonEventObject", {}).get("parameters", {}).get("actionName", "")
+    action_name = (
+        event.get("commonEventObject", {}).get("parameters", {}).get("actionName", "")
+    )
     if action_name == "save_settings":
         form_inputs = event.get("commonEventObject", {}).get("formInputs", {})
-        selected = form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
-        debug_chat = bool(form_inputs.get("debug_chat", {}).get("stringInputs", {}).get("value"))
-        logger.info("Dialog save_settings user=%s enabled_servers=%s debug_chat=%s", _user_id(event), selected, debug_chat)
-        await save_user_settings(_user_id(event), {"enabled_mcp_servers": selected, "debug_chat": debug_chat})
+        selected = (
+            form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
+        )
+        debug_chat = bool(
+            form_inputs.get("debug_chat", {}).get("stringInputs", {}).get("value")
+        )
+        logger.info(
+            "Dialog save_settings user=%s enabled_servers=%s debug_chat=%s",
+            _user_id(event),
+            selected,
+            debug_chat,
+        )
+        await save_user_settings(
+            _user_id(event), {"enabled_mcp_servers": selected, "debug_chat": debug_chat}
+        )
         await clear_history(_user_id(event))
         return settings_dialog_ok()
 
@@ -283,22 +374,42 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
     logger.info("Replaying pending message for user=%s", user_id)
     access_token = await get_fresh_access_token(user_id)
     if not access_token:
-        logger.error("Cannot replay message for user=%s: no access token after re-auth", user_id)
+        logger.error(
+            "Cannot replay message for user=%s: no access token after re-auth", user_id
+        )
         return
 
     user_info = await get_user_info(user_id)
     user_settings = await get_user_settings(user_id)
-    agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""),
-                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
-                        user_timezone=user_info.get("timezone", ""))
+    agent = GeminiAgent(
+        user_id,
+        access_token,
+        user_info.get("email", ""),
+        user_info.get("display_name", ""),
+        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
+        user_timezone=user_info.get("timezone", ""),
+    )
 
     message_name = None
     thread_name = None
     try:
         phrase = random.choice(THINKING_PHRASES)
-        message_name, thread_name = await create_message(space_name, thinking_card(phrase))
+        message_name, thread_name = await create_message(
+            space_name, thinking_card(phrase)
+        )
     except Exception as exc:
-        logger.error("Failed to create thinking card for replay user=%s: %s", user_id, exc)
+        logger.error(
+            "Failed to create thinking card for replay user=%s: %s", user_id, exc
+        )
 
-    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name, thread_name,
-                                       user_debug=user_settings.get("debug_chat", False)))
+    asyncio.create_task(
+        _run_and_reply(
+            agent,
+            text,
+            space_name,
+            user_id,
+            message_name,
+            thread_name,
+            user_debug=user_settings.get("debug_chat", False),
+        )
+    )

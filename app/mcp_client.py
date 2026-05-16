@@ -8,6 +8,7 @@ Architecture:
 Transport: Streamable HTTP (POST-based). Confirmed working at
 https://chatmcp.googleapis.com/mcp/v1. SSE (GET) returns 405.
 """
+
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
@@ -28,7 +29,13 @@ CALENDAR_MCP_URL = "https://calendarmcp.googleapis.com/mcp/v1"
 DRIVE_MCP_URL = "https://drivemcp.googleapis.com/mcp/v1"
 
 # Add new MCP servers here — no other changes needed.
-MCP_SERVERS = [CHAT_MCP_URL, PEOPLE_MCP_URL, GMAIL_MCP_URL, CALENDAR_MCP_URL, DRIVE_MCP_URL]
+MCP_SERVERS = [
+    CHAT_MCP_URL,
+    PEOPLE_MCP_URL,
+    GMAIL_MCP_URL,
+    CALENDAR_MCP_URL,
+    DRIVE_MCP_URL,
+]
 
 _SERVER_PREFIX = {
     CHAT_MCP_URL: "chat",
@@ -42,8 +49,9 @@ _SERVER_PREFIX = {
 @dataclass
 class BoundTool:
     """MCP tool with its prefixed name (sent to Gemini) and original name (sent to MCP)."""
-    name: str            # prefixed, e.g. "chat_list_spaces"
-    original_name: str   # as registered on the MCP server, e.g. "list_spaces"
+
+    name: str  # prefixed, e.g. "chat_list_spaces"
+    original_name: str  # as registered on the MCP server, e.g. "list_spaces"
     description: str
     inputSchema: dict
     session: ClientSession
@@ -69,7 +77,9 @@ async def _log_mcp_response(response: httpx.Response) -> None:
             response.text,
         )
     except Exception as exc:
-        logger.debug("MCP HTTP response: %s (could not read body: %s)", response.status_code, exc)
+        logger.debug(
+            "MCP HTTP response: %s (could not read body: %s)", response.status_code, exc
+        )
 
 
 def _debug_http_client_factory(**kwargs) -> httpx.AsyncClient:
@@ -90,7 +100,9 @@ async def workspace_mcp_session(
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
     factory = _debug_http_client_factory if debug_http else create_mcp_http_client
-    async with streamablehttp_client(url, headers=headers, httpx_client_factory=factory) as (read, write, _):
+    async with streamablehttp_client(
+        url, headers=headers, httpx_client_factory=factory
+    ) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             yield session
@@ -109,13 +121,22 @@ async def multi_mcp_session(
     """
     active = MCP_SERVERS
     if enabled_servers is not None:
-        active = [url for url in MCP_SERVERS if _SERVER_PREFIX.get(url) in enabled_servers]
+        active = [
+            url for url in MCP_SERVERS if _SERVER_PREFIX.get(url) in enabled_servers
+        ]
     async with AsyncExitStack() as stack:
         sessions = []
         for url in active:
-            sessions.append((url, await stack.enter_async_context(
-                workspace_mcp_session(access_token, url=url, debug_http=debug_http)
-            )))
+            sessions.append(
+                (
+                    url,
+                    await stack.enter_async_context(
+                        workspace_mcp_session(
+                            access_token, url=url, debug_http=debug_http
+                        )
+                    ),
+                )
+            )
         tools_per_server = await asyncio.gather(*[s.list_tools() for _, s in sessions])
 
         all_tools: list[BoundTool] = []
