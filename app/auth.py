@@ -125,6 +125,24 @@ async def get_user_info(user_id: str) -> dict:
     return {"email": data.get("email", ""), "display_name": data.get("display_name", "")}
 
 
+async def get_user_settings(user_id: str) -> dict:
+    """Return persisted user settings, or {} if none have been saved."""
+    db = _get_db()
+    doc = await db.collection("users").document(_doc_id(user_id)).get()
+    if not doc.exists:
+        return {}
+    return doc.to_dict().get("settings", {})
+
+
+async def save_user_settings(user_id: str, data: dict) -> None:
+    """Persist user settings (merged into the existing user document)."""
+    db = _get_db()
+    await db.collection("users").document(_doc_id(user_id)).set(
+        {"settings": data}, merge=True
+    )
+    logger.info("Saved settings for user=%s", user_id)
+
+
 async def get_auth_url(user_id: str) -> str:
     """Return the Google OAuth authorization URL for the given user."""
     if not settings.oauth_client_id or settings.oauth_client_id == "PLACEHOLDER":

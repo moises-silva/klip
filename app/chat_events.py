@@ -4,7 +4,7 @@ import logging
 import random
 import time
 
-from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, is_authorized, save_pending_message, save_user_context
+from .auth import delete_user, get_auth_url, get_fresh_access_token, get_user_info, get_user_settings, is_authorized, save_pending_message, save_user_context, save_user_settings
 from .history import clear_history, load_history, save_history
 from .cards import THINKING_PHRASES, reauth_card, settings_dialog, settings_dialog_ok, text_response, thinking_card, welcome_card
 from .chat_api import create_message, post_message, update_message
@@ -201,7 +201,9 @@ async def handle_message(event: dict) -> dict:
         return welcome_card(auth_url)
 
     space = _space_name(event)
-    agent = GeminiAgent(user_id, access_token, _user_email(event), _display_name(event))
+    user_settings = await get_user_settings(user_id)
+    agent = GeminiAgent(user_id, access_token, _user_email(event), _display_name(event),
+                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"))
 
     # Create the thinking card now so it appears immediately when the sync response
     # completes. The background task then updates it in place as Gemini works.
@@ -232,7 +234,9 @@ async def handle_app_command(event: dict) -> dict:
         return text_response("You have been forgotten. 🫧 It's like we never met. Say hello to start fresh!")
 
     if cmd_id == _COMMAND_SETTINGS:
-        return settings_dialog()
+        user_settings = await get_user_settings(user_id)
+        enabled = user_settings.get("enabled_mcp_servers")  # None = all enabled
+        return settings_dialog(enabled)
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
@@ -251,7 +255,9 @@ async def handle_card_clicked(event: dict) -> dict:
     action_name = event.get("commonEventObject", {}).get("parameters", {}).get("actionName", "")
     if action_name == "save_settings":
         form_inputs = event.get("commonEventObject", {}).get("formInputs", {})
-        logger.info("Dialog save_settings user=%s inputs=%s", _user_id(event), form_inputs)
+        selected = form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
+        logger.info("Dialog save_settings user=%s enabled_servers=%s", _user_id(event), selected)
+        await save_user_settings(_user_id(event), {"enabled_mcp_servers": selected})
         return settings_dialog_ok()
 
     return {}
@@ -271,7 +277,9 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
         return
 
     user_info = await get_user_info(user_id)
-    agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""))
+    user_settings = await get_user_settings(user_id)
+    agent = GeminiAgent(user_id, access_token, user_info.get("email", ""), user_info.get("display_name", ""),
+                        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"))
 
     message_name = None
     thread_name = None

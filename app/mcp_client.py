@@ -100,11 +100,19 @@ async def workspace_mcp_session(
 async def multi_mcp_session(
     access_token: str | None = None,
     debug_http: bool = False,
+    enabled_servers: list[str] | None = None,
 ) -> AsyncGenerator[tuple[dict[str, BoundTool], list[BoundTool]], None]:
-    """Open all MCP_SERVERS and yield (prefixed_name → BoundTool, all_tools)."""
+    """Open MCP servers and yield (prefixed_name → BoundTool, all_tools).
+
+    enabled_servers: list of prefix keys (e.g. ["chat", "gmail"]).
+    None means all servers are enabled (default behaviour).
+    """
+    active = MCP_SERVERS
+    if enabled_servers is not None:
+        active = [url for url in MCP_SERVERS if _SERVER_PREFIX.get(url) in enabled_servers]
     async with AsyncExitStack() as stack:
         sessions = []
-        for url in MCP_SERVERS:
+        for url in active:
             sessions.append((url, await stack.enter_async_context(
                 workspace_mcp_session(access_token, url=url, debug_http=debug_http)
             )))

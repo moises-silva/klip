@@ -107,11 +107,12 @@ class GeminiAgent:
     Model is set by the operator via GEMINI_MODEL env var (default: gemini-2.0-flash).
     """
 
-    def __init__(self, user_id: str, access_token: str, user_email: str = "", display_name: str = ""):
+    def __init__(self, user_id: str, access_token: str, user_email: str = "", display_name: str = "", enabled_mcp_servers: list[str] | None = None):
         self.user_id = user_id
         self.access_token = access_token
         self.user_email = user_email
         self.display_name = display_name
+        self.enabled_mcp_servers = enabled_mcp_servers
 
     async def respond(
         self, user_message: str, history: list[dict] | None = None
@@ -121,7 +122,7 @@ class GeminiAgent:
         tool_records: list[dict] = []
         try:
             client = _get_client()
-            async with multi_mcp_session(self.access_token, debug_http=settings.debug_mcp_http) as (tool_session, all_tools):
+            async with multi_mcp_session(self.access_token, debug_http=settings.debug_mcp_http, enabled_servers=self.enabled_mcp_servers) as (tool_session, all_tools):
                 gemini_tools = _mcp_tools_to_gemini(all_tools)
                 logger.info(
                     "MCP tools available for user=%s: %s",

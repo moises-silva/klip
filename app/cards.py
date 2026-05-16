@@ -215,8 +215,21 @@ def text_response(message: str) -> dict:
     return _chat_action({"text": message})
 
 
-def settings_dialog() -> dict:
-    """Dialog opened by the /settings quick command. Simple test form."""
+_MCP_SERVERS = [
+    ("chat", "Google Chat"),
+    ("people", "Google Contacts"),
+    ("gmail", "Gmail"),
+    ("calendar", "Google Calendar"),
+    ("drive", "Google Drive"),
+]
+
+
+def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
+    """Dialog opened by the /settings quick command.
+
+    enabled_servers: list of server keys currently enabled for this user.
+    None means all are enabled (no preference saved yet).
+    """
     return {
         "action": {
             "navigations": [
@@ -225,13 +238,21 @@ def settings_dialog() -> dict:
                         "header": {"title": "Klip Settings"},
                         "sections": [
                             {
+                                "header": "Workspace services",
                                 "widgets": [
                                     {
-                                        "textInput": {
-                                            "name": "test_field",
-                                            "label": "Test field",
-                                            "type": "SINGLE_LINE",
-                                            "hintText": "Enter some text",
+                                        "selectionInput": {
+                                            "name": "mcp_servers",
+                                            "label": "Enable access to these services",
+                                            "type": "CHECK_BOX",
+                                            "items": [
+                                                {
+                                                    "text": label,
+                                                    "value": key,
+                                                    "selected": enabled_servers is None or key in enabled_servers,
+                                                }
+                                                for key, label in _MCP_SERVERS
+                                            ],
                                         }
                                     },
                                     {
