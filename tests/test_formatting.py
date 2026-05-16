@@ -65,6 +65,11 @@ def test_bare_email_converted_to_gmail_compose():
     result = md_to_chat("from moy@example.com today")
     assert result == "from <https://mail.google.com/mail/?view=cm&to=moy@example.com|moy@example.com> today"
 
+def test_bare_email_at_end_of_sentence_no_trailing_dot():
+    # Trailing sentence period must not be included in the email match.
+    result = md_to_chat("Contact alejandro@example.com. Is this correct?")
+    assert result == "Contact <https://mail.google.com/mail/?view=cm&to=alejandro@example.com|alejandro@example.com>. Is this correct?"
+
 def test_bare_email_not_double_converted():
     # An email already inside a markdown link should not get a second wrap.
     src = "[moy@example.com](mailto:moy@example.com)"

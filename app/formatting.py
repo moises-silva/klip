@@ -54,7 +54,7 @@ def md_to_chat(text: str) -> str:
     # Negative lookbehind excludes emails already inside a <url|display> Chat link,
     # where the address is preceded by | (display part) or < or : (URL part).
     text = re.sub(
-        r"(?<![<:/|\w])[\w.+-]+@[\w-]+\.[\w.]+",
+        r"(?<![<:/|\w])[\w.+-]+@[\w-]+\.[\w]+(?:\.[\w]+)*",
         r"<https://mail.google.com/mail/?view=cm&to=\g<0>|\g<0>>",
         text,
     )
