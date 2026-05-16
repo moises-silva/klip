@@ -226,6 +226,47 @@ def reauth_card(auth_url: str) -> dict:
     }
 
 
+def services_changed_card(auth_url: str) -> dict:
+    """Sent via the Chat REST API when the user enables new services that need new OAuth scopes."""
+    return {
+        "text": "",
+        "cardsV2": [
+            {
+                "cardId": "services-changed-card",
+                "card": {
+                    "header": {
+                        "title": "Re-authorization needed",
+                        "subtitle": "Your Workspace service configuration has changed.",
+                    },
+                    "sections": [
+                        {
+                            "widgets": [
+                                {
+                                    "textParagraph": {
+                                        "text": "Your Workspace service configuration has changed. Please re-authorize Klip so your permissions match your updated settings."
+                                    }
+                                },
+                                {
+                                    "buttonList": {
+                                        "buttons": [
+                                            {
+                                                "text": "Authorize Klip",
+                                                "onClick": {
+                                                    "openLink": {"url": auth_url}
+                                                },
+                                            }
+                                        ]
+                                    }
+                                },
+                            ]
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+
+
 def text_response(message: str) -> dict:
     return _chat_action({"text": message})
 

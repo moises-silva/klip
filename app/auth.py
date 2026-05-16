@@ -18,21 +18,47 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
-OAUTH_SCOPES = [
-    "https://www.googleapis.com/auth/chat.messages",
-    "https://www.googleapis.com/auth/chat.messages.readonly",
-    "https://www.googleapis.com/auth/chat.spaces.readonly",
-    "https://www.googleapis.com/auth/chat.memberships.readonly",
-    "https://www.googleapis.com/auth/contacts.readonly",
-    "https://www.googleapis.com/auth/directory.readonly",
+_BASE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.compose",
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/drive.file",
 ]
+
+_SCOPES_BY_SERVER: dict[str, list[str]] = {
+    "chat": [
+        "https://www.googleapis.com/auth/chat.messages",
+        "https://www.googleapis.com/auth/chat.messages.readonly",
+        "https://www.googleapis.com/auth/chat.spaces.readonly",
+        "https://www.googleapis.com/auth/chat.memberships.readonly",
+    ],
+    "people": [
+        "https://www.googleapis.com/auth/contacts.readonly",
+        "https://www.googleapis.com/auth/directory.readonly",
+    ],
+    "gmail": [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.compose",
+    ],
+    "calendar": [
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/calendar.events",
+    ],
+    "drive": [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive.file",
+    ],
+}
+
+
+ALL_SERVER_KEYS: frozenset[str] = frozenset(_SCOPES_BY_SERVER)
+
+
+def _scopes_for_servers(enabled_servers: list[str] | None) -> list[str]:
+    """Return OAuth scopes for the given server keys. None means all servers."""
+    keys = enabled_servers if enabled_servers is not None else list(_SCOPES_BY_SERVER)
+    scopes = list(_BASE_SCOPES)
+    for key in keys:
+        scopes.extend(_SCOPES_BY_SERVER.get(key, []))
+    return scopes
+
 
 _db: firestore.AsyncClient | None = None
 _chat_service = None
@@ -61,7 +87,7 @@ def _doc_id(user_id: str) -> str:
     return user_id.replace("/", "_")
 
 
-def _build_flow() -> Flow:
+def _build_flow(scopes: list[str] | None = None) -> Flow:
     flow = Flow.from_client_config(
         {
             "web": {
@@ -72,7 +98,7 @@ def _build_flow() -> Flow:
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
-        scopes=OAUTH_SCOPES,
+        scopes=scopes or _scopes_for_servers(None),
     )
     flow.redirect_uri = f"{settings.app_base_url}/auth/callback"
     return flow
@@ -165,30 +191,31 @@ async def save_user_settings(user_id: str, data: dict) -> None:
     logger.info("Saved settings for user=%s", user_id)
 
 
-async def get_auth_url(user_id: str) -> str:
-    """Return the Google OAuth authorization URL for the given user."""
-    if not settings.oauth_client_id or settings.oauth_client_id == "PLACEHOLDER":
+async def get_auth_url(user_id: str, enabled_servers: list[str] | None = None) -> str:
+    """Return the Google OAuth authorization URL for the given user.
+
+    enabled_servers: only request scopes for these services. None means all.
+    """
+    if not settings.oauth_client_id:
         logger.warning("OAuth client ID not configured")
         return "#"
-    flow = _build_flow()
+    scopes = _scopes_for_servers(enabled_servers)
+    flow = _build_flow(scopes)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         state=_encode_state({"user_id": user_id}),
         prompt="consent",
     )
-    # Persist the PKCE code verifier (if the library generated one) so it can
-    # be retrieved during the callback, which uses a fresh flow object.
+    # Persist the requested scopes and PKCE code verifier so the callback can
+    # reconstruct an identical Flow object when exchanging the authorization code.
     code_verifier = getattr(flow, "code_verifier", None) or getattr(
         getattr(flow, "oauth2session", None), "_code_verifier", None
     )
+    db = _get_db()
+    pending: dict = {"requested_scopes": scopes}
     if code_verifier:
-        db = _get_db()
-        await (
-            db.collection("users")
-            .document(_doc_id(user_id))
-            .set({"code_verifier": code_verifier}, merge=True)
-        )
+        pending["code_verifier"] = code_verifier
+    await db.collection("users").document(_doc_id(user_id)).set(pending, merge=True)
     return auth_url
 
 
@@ -295,12 +322,14 @@ async def handle_oauth_callback(
     state_data = _decode_state(state)
     user_id = state_data["user_id"]
 
-    # Retrieve the PKCE code verifier stored when the auth URL was generated
+    # Retrieve the scopes and PKCE code verifier stored when the auth URL was generated
     db = _get_db()
     user_doc = await db.collection("users").document(_doc_id(user_id)).get()
-    code_verifier = user_doc.to_dict().get("code_verifier") if user_doc.exists else None
+    user_data = user_doc.to_dict() if user_doc.exists else {}
+    code_verifier = user_data.get("code_verifier")
+    requested_scopes = user_data.get("requested_scopes")
 
-    flow = _build_flow()
+    flow = _build_flow(requested_scopes)
     fetch_kwargs = {"code": code}
     if code_verifier:
         fetch_kwargs["code_verifier"] = code_verifier

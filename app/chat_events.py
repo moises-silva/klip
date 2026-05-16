@@ -5,6 +5,7 @@ import random
 import time
 
 from .auth import (
+    ALL_SERVER_KEYS,
     delete_user,
     get_auth_url,
     get_fresh_access_token,
@@ -19,6 +20,7 @@ from .history import clear_history, load_history, save_history
 from .cards import (
     THINKING_PHRASES,
     reauth_card,
+    services_changed_card,
     settings_dialog,
     settings_dialog_ok,
     text_response,
@@ -68,19 +70,10 @@ def _space_name(event: dict) -> str:
     space = (
         chat.get("messagePayload", {}).get("space")
         or chat.get("addedToSpacePayload", {}).get("space")
-        or chat.get("appCommandPayload", {}).get("space", {})
+        or chat.get("appCommandPayload", {}).get("space")
+        or chat.get("buttonClickedPayload", {}).get("space", {})
     )
     return space.get("name", "")
-
-
-def _slash_command_id(event: dict) -> int | None:
-    cmd = (
-        _chat(event)
-        .get("messagePayload", {})
-        .get("message", {})
-        .get("slashCommand", {})
-    )
-    return cmd.get("commandId")
 
 
 def _config_redirect_uri(event: dict) -> str:
@@ -170,7 +163,9 @@ async def _run_and_reply(
             "Insufficient OAuth scopes for user=%s, prompting re-auth", user_id
         )
         await save_pending_message(user_id, text)
-        auth_url = await get_auth_url(user_id)
+        auth_url = await get_auth_url(
+            user_id, enabled_servers=agent.enabled_mcp_servers
+        )
         result = reauth_card(auth_url)
     except TimeoutError:
         logger.warning(
@@ -251,27 +246,25 @@ async def handle_message(event: dict) -> dict:
     logger.info("MESSAGE user=%s text=%.100s", user_id, text)
     await _save_context(event)
 
-    if _slash_command_id(event) == _COMMAND_FORGET_HISTORY:
-        await clear_history(user_id)
-        return text_response("Done! I've forgotten our conversation history.")
+    user_settings = await get_user_settings(user_id)
+    enabled_servers = user_settings.get("enabled_mcp_servers")
 
     if not await is_authorized(user_id):
-        auth_url = await get_auth_url(user_id)
+        auth_url = await get_auth_url(user_id, enabled_servers=enabled_servers)
         return welcome_card(auth_url)
 
     access_token = await get_fresh_access_token(user_id)
     if not access_token:
-        auth_url = await get_auth_url(user_id)
+        auth_url = await get_auth_url(user_id, enabled_servers=enabled_servers)
         return welcome_card(auth_url)
 
     space = _space_name(event)
-    user_settings = await get_user_settings(user_id)
     agent = GeminiAgent(
         user_id,
         access_token,
         _user_email(event),
         _display_name(event),
-        enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
+        enabled_mcp_servers=enabled_servers,
         user_timezone=_user_timezone(event),
     )
 
@@ -342,6 +335,7 @@ async def handle_card_clicked(event: dict) -> dict:
         event.get("commonEventObject", {}).get("parameters", {}).get("actionName", "")
     )
     if action_name == "save_settings":
+        user_id = _user_id(event)
         form_inputs = event.get("commonEventObject", {}).get("formInputs", {})
         selected = (
             form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
@@ -351,14 +345,34 @@ async def handle_card_clicked(event: dict) -> dict:
         )
         logger.info(
             "Dialog save_settings user=%s enabled_servers=%s debug_chat=%s",
-            _user_id(event),
+            user_id,
             selected,
             debug_chat,
         )
+
+        old_settings = await get_user_settings(user_id)
+        old_enabled = old_settings.get("enabled_mcp_servers")  # None = all previously
+
         await save_user_settings(
-            _user_id(event), {"enabled_mcp_servers": selected, "debug_chat": debug_chat}
+            user_id, {"enabled_mcp_servers": selected, "debug_chat": debug_chat}
         )
-        await clear_history(_user_id(event))
+        await clear_history(user_id)
+
+        # Prompt re-authorization whenever the service selection changes.
+        # Post if: services changed AND (user is already authorized OR user chose a
+        # subset while not yet authorized, e.g. after a reset).
+        selected_set = set(selected)
+        old_set = ALL_SERVER_KEYS if old_enabled is None else set(old_enabled)
+        space = _space_name(event)
+        if selected_set != old_set and space:
+            authorized = await is_authorized(user_id)
+            if authorized or selected_set != ALL_SERVER_KEYS:
+                auth_url = await get_auth_url(user_id, enabled_servers=selected)
+                try:
+                    await create_message(space, services_changed_card(auth_url))
+                except Exception as exc:
+                    logger.error("Failed to post services changed card: %s", exc)
+
         return settings_dialog_ok()
 
     return {}
