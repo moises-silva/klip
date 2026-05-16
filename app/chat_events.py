@@ -95,6 +95,7 @@ async def _phrase_updater(message_name: str, stop: asyncio.Event) -> None:
 async def _run_and_reply(
     agent: GeminiAgent, text: str, space: str, user_id: str,
     message_name: str | None, thread_name: str | None = None,
+    user_debug: bool = False,
 ) -> None:
     t_start = time.monotonic()
     stop = asyncio.Event()
@@ -161,7 +162,7 @@ async def _run_and_reply(
         except Exception as exc:
             logger.error("Failed to post async reply to space=%s: %s", space, exc)
 
-    if settings.debug_chat and posted and raw_result is not None and thread_name:
+    if settings.debug_chat and user_debug and posted and raw_result is not None and thread_name:
         total_ms = int((time.monotonic() - t_start) * 1000)
         debug_data = {
             "timing": {"total_ms": total_ms, "gemini_ms": gemini_ms},
@@ -215,7 +216,8 @@ async def handle_message(event: dict) -> dict:
     except Exception as exc:
         logger.error("Failed to create thinking card for user=%s: %s", user_id, exc)
 
-    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name, thread_name))
+    asyncio.create_task(_run_and_reply(agent, text, space, user_id, message_name, thread_name,
+                                       user_debug=user_settings.get("debug_chat", False)))
     return {}
 
 
@@ -236,7 +238,8 @@ async def handle_app_command(event: dict) -> dict:
     if cmd_id == _COMMAND_SETTINGS:
         user_settings = await get_user_settings(user_id)
         enabled = user_settings.get("enabled_mcp_servers")  # None = all enabled
-        return settings_dialog(enabled)
+        debug_enabled = user_settings.get("debug_chat", False)
+        return settings_dialog(enabled, debug_enabled=debug_enabled)
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
@@ -256,8 +259,9 @@ async def handle_card_clicked(event: dict) -> dict:
     if action_name == "save_settings":
         form_inputs = event.get("commonEventObject", {}).get("formInputs", {})
         selected = form_inputs.get("mcp_servers", {}).get("stringInputs", {}).get("value", [])
-        logger.info("Dialog save_settings user=%s enabled_servers=%s", _user_id(event), selected)
-        await save_user_settings(_user_id(event), {"enabled_mcp_servers": selected})
+        debug_chat = bool(form_inputs.get("debug_chat", {}).get("stringInputs", {}).get("value"))
+        logger.info("Dialog save_settings user=%s enabled_servers=%s debug_chat=%s", _user_id(event), selected, debug_chat)
+        await save_user_settings(_user_id(event), {"enabled_mcp_servers": selected, "debug_chat": debug_chat})
         await clear_history(_user_id(event))
         return settings_dialog_ok()
 
@@ -290,4 +294,5 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
     except Exception as exc:
         logger.error("Failed to create thinking card for replay user=%s: %s", user_id, exc)
 
-    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name, thread_name))
+    asyncio.create_task(_run_and_reply(agent, text, space_name, user_id, message_name, thread_name,
+                                       user_debug=user_settings.get("debug_chat", False)))

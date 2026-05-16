@@ -224,11 +224,13 @@ _MCP_SERVERS = [
 ]
 
 
-def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
+def settings_dialog(enabled_servers: list[str] | None = None, debug_enabled: bool = False) -> dict:
     """Dialog opened by the /settings quick command.
 
     enabled_servers: list of server keys currently enabled for this user.
     None means all are enabled (no preference saved yet).
+    debug_enabled: current value of the user's per-user debug toggle.
+    The Debug section is only rendered when settings.debug_chat is True.
     """
     return {
         "action": {
@@ -255,6 +257,28 @@ def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
                                             ],
                                         }
                                     },
+                                ],
+                            },
+                            *([{
+                                "header": "Debug",
+                                "widgets": [
+                                    {
+                                        "selectionInput": {
+                                            "name": "debug_chat",
+                                            "type": "CHECK_BOX",
+                                            "items": [
+                                                {
+                                                    "text": "Enable",
+                                                    "value": "true",
+                                                    "selected": debug_enabled,
+                                                }
+                                            ],
+                                        }
+                                    },
+                                ],
+                            }] if settings.debug_chat else []),
+                            {
+                                "widgets": [
                                     {
                                         "buttonList": {
                                             "buttons": [
@@ -278,7 +302,7 @@ def settings_dialog(enabled_servers: list[str] | None = None) -> dict:
                                         }
                                     },
                                 ],
-                            }
+                            },
                         ],
                     }
                 }
