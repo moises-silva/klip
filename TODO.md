@@ -49,6 +49,13 @@ How do we make this App extensible (e.g plugins?) as a foundation to build on
 Make sure is easy to change the branding information easily (beyond just the App config). This
 likely includes adjustments to some prompts and card titles.
 
+## Web UI
+
+- Markdown rendering for chat responses (e.g. marked.js)
+- Streaming responses (typewriter effect)
+- Conversation history persistence across sessions
+- Mobile-optimized layout
+
 # Bugs
 
 - Only request the oauth scopes needed based on the services enabled in the App settings

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     debug_chat: bool = False
     # Maximum word count for user prompt instructions.
     max_user_prompt_words: int = 250
+    # Enable the unauthenticated web chat interface at /web. Disabled by default.
+    web_enabled: bool = False
+    # Daily message limit for the unauthenticated web chat interface (per IP and per browser).
+    web_daily_limit: int = 50
 
 
 settings = Settings()

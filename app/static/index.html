@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klip</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0d1117;
+            --surface:   #161b22;
+            --surface2:  #21262d;
+            --border:    #30363d;
+            --text:      #e6edf3;
+            --muted:     #7d8590;
+            --accent:    #4493f8;
+            --user-bg:   #1c4b9a;
+            --bot-bg:    #21262d;
+            --err-bg:    #2a1515;
+            --err-text:  #f85149;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Header ── */
+        header {
+            flex-shrink: 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .logo img { height: 32px; width: 32px; border-radius: 50%; }
+        .logo span { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
+        .tagline { font-size: 0.8rem; color: var(--muted); }
+
+        .settings-btn {
+            margin-left: auto;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: border-color .15s, color .15s;
+        }
+        .settings-btn:hover { border-color: var(--accent); color: var(--text); }
+        .settings-btn.active { border-color: var(--accent); color: var(--accent); }
+
+        /* ── Settings panel ── */
+        .settings-panel {
+            flex-shrink: 0;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height .25s ease, padding .25s ease;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+        }
+        .settings-panel.open { max-height: 220px; padding: 16px 20px; }
+
+        .settings-panel label {
+            display: block;
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .settings-panel textarea {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 10px 12px;
+            font-size: 0.88rem;
+            font-family: inherit;
+            resize: none;
+            height: 80px;
+            line-height: 1.5;
+            transition: border-color .15s;
+        }
+        .settings-panel textarea:focus { outline: none; border-color: var(--accent); }
+        .settings-panel textarea::placeholder { color: var(--muted); }
+
+        .word-count { font-size: 0.75rem; color: var(--muted); margin-top: 5px; text-align: right; }
+        .word-count.over { color: var(--err-text); }
+
+        /* ── Chat ── */
+        .chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .msg { display: flex; max-width: 78%; }
+        .msg.user  { align-self: flex-end; }
+        .msg.bot, .msg.error { align-self: flex-start; }
+
+        .bubble {
+            padding: 10px 14px;
+            border-radius: 18px;
+            font-size: 0.93rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .msg.user  .bubble { background: var(--user-bg); color: #e6edf3; border-bottom-right-radius: 4px; }
+        .msg.bot   .bubble { background: var(--bot-bg);  color: var(--text);     border-bottom-left-radius: 4px; }
+        .msg.error .bubble { background: var(--err-bg);  color: var(--err-text); border-bottom-left-radius: 4px; }
+
+        /* typing dots */
+        .dots { display: flex; gap: 5px; padding: 4px 2px; }
+        .dots span {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--muted);
+            animation: pop 1.2s ease-in-out infinite;
+        }
+        .dots span:nth-child(2) { animation-delay: .2s; }
+        .dots span:nth-child(3) { animation-delay: .4s; }
+
+        @keyframes pop {
+            0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+            30%            { transform: translateY(-7px); opacity: 1; }
+        }
+
+        /* ── Input area ── */
+        .input-wrap {
+            flex-shrink: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 14px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-row { display: flex; gap: 10px; align-items: flex-end; }
+
+        .input-wrap textarea {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            padding: 10px 14px;
+            font-size: 0.93rem;
+            font-family: inherit;
+            resize: none;
+            max-height: 120px;
+            line-height: 1.5;
+            transition: border-color .15s;
+        }
+        .input-wrap textarea:focus { outline: none; border-color: var(--accent); }
+        .input-wrap textarea::placeholder { color: var(--muted); }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            padding: 10px 18px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: filter .15s, opacity .15s;
+        }
+        .send-btn:hover:not(:disabled) { filter: brightness(1.12); }
+        .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+        .limit-note { font-size: 0.75rem; color: var(--muted); text-align: center; min-height: 1em; }
+        .limit-note.warn { color: #e67e00; }
+    </style>
+</head>
+<body>
+
+<header>
+    <a class="logo" href="">
+        <img src="https://storage.googleapis.com/klip-static/klip_avatar_512.gif" alt="Klip">
+        <span>Klip</span>
+    </a>
+    <span class="tagline">AI assistant · web search</span>
+    <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()">⚙ Settings</button>
+</header>
+
+<div class="settings-panel" id="settingsPanel">
+    <label for="customInstr">
+        Custom instructions
+        <span style="font-weight:normal;color:var(--muted)"> — stored for this session only</span>
+    </label>
+    <textarea id="customInstr"
+              placeholder="E.g. Respond in Spanish. Keep answers under 3 sentences."
+              oninput="onInstrInput()"></textarea>
+    <div class="word-count" id="wordCount">0 / 250 words</div>
+</div>
+
+<div class="chat" id="chat"></div>
+
+<div class="input-wrap">
+    <div class="input-row">
+        <textarea id="msgInput"
+                  placeholder="Ask anything…"
+                  rows="1"
+                  onkeydown="onKey(event)"
+                  oninput="autoGrow(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="send()">Send</button>
+    </div>
+    <div class="limit-note" id="limitNote"></div>
+</div>
+
+<script>
+    // ── Fingerprint ──
+    const FP = (() => {
+        const k = 'klip_fp';
+        let v = localStorage.getItem(k);
+        if (!v) { v = crypto.randomUUID(); localStorage.setItem(k, v); }
+        return v;
+    })();
+
+    // ── API URL (resolves correctly through any proxy prefix) ──
+    const CHAT_URL = window.location.pathname.replace(/\/web\/?$/, '') + '/web/chat';
+
+    // ── State ──
+    const MAX_WORDS    = 250;
+    const DAILY_LIMIT  = 50;
+    let msgCount = parseInt(sessionStorage.getItem('klip_msgs') || '0');
+    let busy = false;
+
+    // ── Boot ──
+    addMsg('bot', "Hi! I'm Klip, an AI assistant with web search. Ask me anything.");
+    updateLimit();
+
+    // ── Settings ──
+    function toggleSettings() {
+        const panel = document.getElementById('settingsPanel');
+        const btn   = document.getElementById('settingsBtn');
+        const open  = panel.classList.toggle('open');
+        btn.classList.toggle('active', open);
+        if (open) document.getElementById('customInstr').focus();
+    }
+
+    function onInstrInput() {
+        const text  = document.getElementById('customInstr').value.trim();
+        const words = text ? text.split(/\s+/).length : 0;
+        const el    = document.getElementById('wordCount');
+        el.textContent = `${words} / ${MAX_WORDS} words`;
+        el.className   = 'word-count' + (words > MAX_WORDS ? ' over' : '');
+    }
+
+    function getInstr() { return document.getElementById('customInstr').value.trim(); }
+    function instrWords() { const t = getInstr(); return t ? t.split(/\s+/).length : 0; }
+
+    // ── Messages ──
+    function addMsg(role, text) {
+        const chat   = document.getElementById('chat');
+        const div    = document.createElement('div');
+        div.className = `msg ${role}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        if (role === 'typing') {
+            bubble.innerHTML = '<div class="dots"><span></span><span></span><span></span></div>';
+        } else {
+            bubble.textContent = text;
+        }
+        div.appendChild(bubble);
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+        return div;
+    }
+
+    // ── Input ──
+    function autoGrow(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+
+    function onKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    }
+
+    // ── Limit display ──
+    function updateLimit() {
+        const el        = document.getElementById('limitNote');
+        const remaining = DAILY_LIMIT - msgCount;
+        if (remaining <= 0) {
+            el.textContent = `Daily limit reached. Try again tomorrow.`;
+            el.className   = 'limit-note warn';
+            document.getElementById('sendBtn').disabled = true;
+        } else if (remaining <= 10) {
+            el.textContent = `${remaining} of ${DAILY_LIMIT} daily messages remaining`;
+            el.className   = 'limit-note warn';
+        } else {
+            el.textContent = '';
+            el.className   = 'limit-note';
+        }
+    }
+
+    // ── Send ──
+    async function send() {
+        const input   = document.getElementById('msgInput');
+        const message = input.value.trim();
+        if (!message || busy) return;
+
+        if (instrWords() > MAX_WORDS) {
+            addMsg('error', `Custom instructions exceed ${MAX_WORDS} words. Please shorten them in Settings.`);
+            return;
+        }
+
+        input.value       = '';
+        input.style.height = 'auto';
+        addMsg('user', message);
+
+        const typing = addMsg('typing', '');
+        busy = true;
+        document.getElementById('sendBtn').disabled = true;
+
+        try {
+            const res  = await fetch(CHAT_URL, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ message, custom_instruction: getInstr(), fingerprint: FP }),
+            });
+            const data = await res.json();
+            typing.remove();
+
+            if (!res.ok) {
+                addMsg('error', data.error || 'Something went wrong.');
+            } else {
+                addMsg('bot', data.reply);
+                msgCount++;
+                sessionStorage.setItem('klip_msgs', msgCount);
+                updateLimit();
+            }
+        } catch {
+            typing.remove();
+            addMsg('error', 'Connection error. Please try again.');
+        } finally {
+            busy = false;
+            if (msgCount < DAILY_LIMIT) document.getElementById('sendBtn').disabled = false;
+            document.getElementById('msgInput').focus();
+        }
+    }
+</script>
+
+</body>
+</html>

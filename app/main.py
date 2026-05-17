@@ -19,6 +19,7 @@ from .chat_events import (
 from .auth import handle_oauth_callback
 from .config import settings
 from .verification import extract_bearer_token, verify_addon_token
+from .web import router as web_router
 
 # Prevent BrokenPipeError noise when stdout is closed during shutdown (e.g. Ctrl+C).
 if hasattr(signal, "SIGPIPE"):
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Klip", lifespan=lifespan)
+app.include_router(web_router)
 
 
 @app.get("/auth/callback")
