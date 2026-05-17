@@ -282,7 +282,9 @@ _MCP_SERVERS = [
 
 
 def settings_dialog(
-    enabled_servers: list[str] | None = None, debug_enabled: bool = False
+    enabled_servers: list[str] | None = None,
+    debug_enabled: bool = False,
+    user_prompt_instruction: str = "",
 ) -> dict:
     """Dialog opened by the /settings quick command.
 
@@ -290,6 +292,7 @@ def settings_dialog(
     None means all are enabled (no preference saved yet).
     debug_enabled: current value of the user's per-user debug toggle.
     The Debug section is only rendered when settings.debug_chat is True.
+    user_prompt_instruction: current value of the user's custom prompt instructions.
     """
     return {
         "action": {
@@ -328,6 +331,23 @@ def settings_dialog(
                                                 }
                                                 for key, label in _MCP_SERVERS
                                             ],
+                                        }
+                                    },
+                                ],
+                            },
+                            {
+                                "widgets": [
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>User Prompt Instructions</b>"
+                                        }
+                                    },
+                                    {
+                                        "textInput": {
+                                            "name": "user_prompt_instruction",
+                                            "label": "Custom instructions for Gemini (up to 250 words)",
+                                            "type": "MULTIPLE_LINE",
+                                            "value": user_prompt_instruction,
                                         }
                                     },
                                 ],

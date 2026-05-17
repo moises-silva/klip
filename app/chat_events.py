@@ -248,6 +248,7 @@ async def handle_message(event: dict) -> dict:
 
     user_settings = await get_user_settings(user_id)
     enabled_servers = user_settings.get("enabled_mcp_servers")
+    user_prompt_instruction = user_settings.get("user_prompt_instruction", "")
 
     if not await is_authorized(user_id):
         auth_url = await get_auth_url(user_id, enabled_servers=enabled_servers)
@@ -266,6 +267,7 @@ async def handle_message(event: dict) -> dict:
         _display_name(event),
         enabled_mcp_servers=enabled_servers,
         user_timezone=_user_timezone(event),
+        user_prompt_instruction=user_prompt_instruction,
     )
 
     # Create the thinking card now so it appears immediately when the sync response
@@ -312,7 +314,12 @@ async def handle_app_command(event: dict) -> dict:
         user_settings = await get_user_settings(user_id)
         enabled = user_settings.get("enabled_mcp_servers")  # None = all enabled
         debug_enabled = user_settings.get("debug_chat", False)
-        return settings_dialog(enabled, debug_enabled=debug_enabled)
+        user_prompt_instruction = user_settings.get("user_prompt_instruction", "")
+        return settings_dialog(
+            enabled,
+            debug_enabled=debug_enabled,
+            user_prompt_instruction=user_prompt_instruction,
+        )
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}
@@ -343,18 +350,29 @@ async def handle_card_clicked(event: dict) -> dict:
         debug_chat = bool(
             form_inputs.get("debug_chat", {}).get("stringInputs", {}).get("value")
         )
+        user_prompt_instruction = (
+            form_inputs.get("user_prompt_instruction", {})
+            .get("stringInputs", {})
+            .get("value", [""])[0]
+        )
         logger.info(
-            "Dialog save_settings user=%s enabled_servers=%s debug_chat=%s",
+            "Dialog save_settings user=%s enabled_servers=%s debug_chat=%s user_prompt_instruction=%.100s",
             user_id,
             selected,
             debug_chat,
+            user_prompt_instruction,
         )
 
         old_settings = await get_user_settings(user_id)
         old_enabled = old_settings.get("enabled_mcp_servers")  # None = all previously
 
         await save_user_settings(
-            user_id, {"enabled_mcp_servers": selected, "debug_chat": debug_chat}
+            user_id,
+            {
+                "enabled_mcp_servers": selected,
+                "debug_chat": debug_chat,
+                "user_prompt_instruction": user_prompt_instruction,
+            },
         )
         await clear_history(user_id)
 
@@ -404,6 +422,7 @@ async def replay_pending_message(user_id: str, space_name: str, text: str) -> No
         user_info.get("display_name", ""),
         enabled_mcp_servers=user_settings.get("enabled_mcp_servers"),
         user_timezone=user_info.get("timezone", ""),
+        user_prompt_instruction=user_settings.get("user_prompt_instruction", ""),
     )
 
     message_name = None

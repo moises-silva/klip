@@ -77,6 +77,7 @@ def _build_system_instruction(
     display_name: str = "",
     enabled_mcp_servers: list[str] | None = None,
     user_timezone: str = "",
+    user_prompt_instruction: str = "",
 ) -> str:
     try:
         tz = ZoneInfo(user_timezone) if user_timezone else timezone.utc
@@ -101,13 +102,20 @@ def _build_system_instruction(
             "You currently have no Workspace tools available. "
             "This is the authoritative configuration — ignore any prior conversation turns that suggest otherwise."
         )
-    return (
+    system_instruction = (
         "You are Klip, a Google Workspace personal assistant. "
         "Your name is Klip. If asked who you are, say you are Klip, a personal assistant for Google Workspace. "
         "Help the user with their Google Workspace data using the available tools. Be concise and helpful. "
         f"{services_line} "
         f"Today is {now}. {user_line}"
     )
+    if user_prompt_instruction:
+        words = user_prompt_instruction.split()
+        truncated_instruction = " ".join(words[:250])
+        system_instruction += (
+            f"\n\nUser provided instructions:\n{truncated_instruction}"
+        )
+    return system_instruction
 
 
 _MAX_TOOL_ROUNDS = 10
@@ -165,6 +173,7 @@ class GeminiAgent:
         display_name: str = "",
         enabled_mcp_servers: list[str] | None = None,
         user_timezone: str = "",
+        user_prompt_instruction: str = "",
     ):
         self.user_id = user_id
         self.access_token = access_token
@@ -172,6 +181,7 @@ class GeminiAgent:
         self.display_name = display_name
         self.enabled_mcp_servers = enabled_mcp_servers
         self.user_timezone = user_timezone
+        self.user_prompt_instruction = user_prompt_instruction
 
     async def respond(
         self, user_message: str, history: list[dict] | None = None
@@ -212,6 +222,7 @@ class GeminiAgent:
                                 self.display_name,
                                 self.enabled_mcp_servers,
                                 self.user_timezone,
+                                user_prompt_instruction=self.user_prompt_instruction,
                             ),
                             tools=gemini_tools,
                         ),
@@ -420,6 +431,7 @@ class GeminiAgent:
                             self.display_name,
                             self.enabled_mcp_servers,
                             self.user_timezone,
+                            user_prompt_instruction=self.user_prompt_instruction,
                         )
                         + " Note: Workspace tools are temporarily unavailable.",
                         tools=[
