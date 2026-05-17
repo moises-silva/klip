@@ -6,7 +6,7 @@ through the Google Chat MCP server and responds using a Gemini model running on 
 
 Klip is designed to be self-hosted by a company or individual on their own GCP infrastructure.
 
-## Demo  
+## Demo
 
 <img width="800" height="635" alt="klip-demo" src="https://github.com/user-attachments/assets/9a0df50f-d7f1-4e3c-a4f7-f9f155329ea2" />
 
