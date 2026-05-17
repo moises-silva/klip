@@ -8,8 +8,9 @@ RUFF="$ROOT/.venv/bin/ruff"
 if [ ! -x "$RUFF" ]; then
     RUFF="ruff"
 fi
-echo "ruff format --check ..."
-"$RUFF" format --check app tests
+echo "ruff format ..."
+"$RUFF" format app tests
+git diff --cached --name-only --diff-filter=ACM | grep '\.py$' | xargs -r git add
 echo "ruff check ..."
 "$RUFF" check app tests
 
