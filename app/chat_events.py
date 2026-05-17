@@ -12,6 +12,7 @@ from .auth import (
     get_user_info,
     get_user_settings,
     is_authorized,
+    reset_oauth,
     save_pending_message,
     save_user_context,
     save_user_settings,
@@ -238,6 +239,7 @@ async def _run_and_reply(
 _COMMAND_FORGET_HISTORY = 1
 _COMMAND_RESET = 2
 _COMMAND_SETTINGS = 3
+_COMMAND_RESET_OAUTH = 4
 
 
 async def handle_message(event: dict) -> dict:
@@ -321,6 +323,11 @@ async def handle_app_command(event: dict) -> dict:
             user_prompt_instruction=user_prompt_instruction,
             error_message=None,
         )
+
+    if cmd_id == _COMMAND_RESET_OAUTH:
+        await reset_oauth(user_id)
+        auth_url = await get_auth_url(user_id)
+        return welcome_card(auth_url)
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}

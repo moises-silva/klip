@@ -30,17 +30,6 @@ debugger during development.
 - ADC already works via `gcloud auth application-default login`
 - Firestore connects to the real GCP instance (or Firestore emulator for full isolation)
 
-# Configuration & Personalization
-
-Allow users to use a /config command to tweak settings such as:
-
-- Enable/Disable MCP tools/servers (disable completely an MCP server such as gmail or just specific
-  tools)
-- User prompt context / preferences
-
-This could be either via slash command with invoke dialog or in the 'Home' tab for the App (is this
-supported for Chat Addons?)
-
 # Reset Auth Command
 
 /reset_auth slash or quick commadn to reset authorization, but not the rest of the settings (like

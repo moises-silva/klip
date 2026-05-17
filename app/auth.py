@@ -119,6 +119,17 @@ async def delete_user(user_id: str) -> None:
     logger.info("Deleted all data for user=%s", user_id)
 
 
+async def reset_oauth(user_id: str) -> None:
+    """Remove OAuth credentials, forcing re-authorization without affecting other user data."""
+    db = _get_db()
+    await (
+        db.collection("users")
+        .document(_doc_id(user_id))
+        .update({"oauth": firestore.DELETE_FIELD})
+    )
+    logger.info("Reset OAuth credentials for user=%s", user_id)
+
+
 async def save_pending_message(user_id: str, text: str) -> None:
     """Persist the message that triggered a re-auth so it can be replayed after OAuth completes."""
     db = _get_db()
@@ -212,10 +223,12 @@ async def get_auth_url(user_id: str, enabled_servers: list[str] | None = None) -
         getattr(flow, "oauth2session", None), "_code_verifier", None
     )
     db = _get_db()
-    pending: dict = {"requested_scopes": scopes}
+    # Use dot-notation update to avoid overwriting other oauth sub-fields (e.g. tokens
+    # already present during a re-auth flow triggered by InsufficientScopesError).
+    oauth_update: dict = {"oauth.requested_scopes": scopes}
     if code_verifier:
-        pending["code_verifier"] = code_verifier
-    await db.collection("users").document(_doc_id(user_id)).set(pending, merge=True)
+        oauth_update["oauth.code_verifier"] = code_verifier
+    await db.collection("users").document(_doc_id(user_id)).update(oauth_update)
     return auth_url
 
 
@@ -225,25 +238,28 @@ async def is_authorized(user_id: str) -> bool:
     doc = await db.collection("users").document(_doc_id(user_id)).get()
     if not doc.exists:
         return False
-    return bool(doc.to_dict().get("refresh_token"))
+    return bool(doc.to_dict().get("oauth", {}).get("refresh_token"))
 
 
 async def store_tokens(user_id: str, credentials: Credentials) -> None:
     """Save OAuth tokens to the user's Firestore document."""
     db = _get_db()
+    # Write credential fields and clear transient flow state (requested_scopes,
+    # code_verifier) that is only needed during the authorization handshake.
     await (
         db.collection("users")
         .document(_doc_id(user_id))
-        .set(
+        .update(
             {
-                "access_token": credentials.token,
-                "refresh_token": credentials.refresh_token,
-                "token_expiry": credentials.expiry.isoformat()
+                "oauth.access_token": credentials.token,
+                "oauth.refresh_token": credentials.refresh_token,
+                "oauth.token_expiry": credentials.expiry.isoformat()
                 if credentials.expiry
                 else None,
-                "authorized_at": datetime.now(timezone.utc).isoformat(),
-            },
-            merge=True,
+                "oauth.authorized_at": datetime.now(timezone.utc).isoformat(),
+                "oauth.requested_scopes": firestore.DELETE_FIELD,
+                "oauth.code_verifier": firestore.DELETE_FIELD,
+            }
         )
     )
 
@@ -255,17 +271,18 @@ async def get_credentials(user_id: str) -> Credentials | None:
     if not doc.exists:
         return None
     data = doc.to_dict()
-    if not data.get("refresh_token"):
+    oauth = data.get("oauth", {})
+    if not oauth.get("refresh_token"):
         return None
     expiry = None
-    if data.get("token_expiry"):
+    if oauth.get("token_expiry"):
         try:
-            expiry = datetime.fromisoformat(data["token_expiry"])
+            expiry = datetime.fromisoformat(oauth["token_expiry"])
         except ValueError:
             pass
     return Credentials(
-        token=data.get("access_token"),
-        refresh_token=data["refresh_token"],
+        token=oauth.get("access_token"),
+        refresh_token=oauth["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
         client_id=settings.oauth_client_id,
         client_secret=settings.oauth_client_secret,
@@ -326,8 +343,9 @@ async def handle_oauth_callback(
     db = _get_db()
     user_doc = await db.collection("users").document(_doc_id(user_id)).get()
     user_data = user_doc.to_dict() if user_doc.exists else {}
-    code_verifier = user_data.get("code_verifier")
-    requested_scopes = user_data.get("requested_scopes")
+    oauth = user_data.get("oauth", {})
+    code_verifier = oauth.get("code_verifier")
+    requested_scopes = oauth.get("requested_scopes")
 
     flow = _build_flow(requested_scopes)
     fetch_kwargs = {"code": code}
