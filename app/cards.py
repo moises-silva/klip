@@ -123,7 +123,8 @@ def welcome_card(auth_url: str) -> dict:
                 "Hi! I'm Klip, your Google Workspace assistant. 👋\n\n"
                 "I can help you search conversations, summarize threads, find contacts, "
                 "and a whole lot more — but first I'll need permission to access your Workspace data. "
-                "It only takes a moment!"
+                "It only takes a moment!\n\n"
+                "You can execute the '/Configure' command to select the services you want to connect.\n"
             ),
             "cardsV2": [
                 {
