@@ -299,7 +299,15 @@ def settings_dialog(
     sections = []
     if error_message:
         sections.append(
-            {"widgets": [{"textParagraph": {"text": f"<b>Error:</b> {error_message}"}}]}
+            {
+                "widgets": [
+                    {
+                        "textParagraph": {
+                            "text": f'<font color="#cc0000"><b>Error:</b> {error_message}</font>'
+                        }
+                    }
+                ]
+            }
         )
 
     sections.append(
@@ -307,7 +315,7 @@ def settings_dialog(
             "widgets": [
                 {
                     "textParagraph": {
-                        "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
+                        "text": '<font color="#4caf50"><b>Note:</b></font><b> saving settings resets Klip\'s memory of previous conversations.</b>'
                     }
                 }
             ],
