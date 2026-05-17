@@ -285,6 +285,7 @@ def settings_dialog(
     enabled_servers: list[str] | None = None,
     debug_enabled: bool = False,
     user_prompt_instruction: str = "",
+    error_message: str | None = None,
 ) -> dict:
     """Dialog opened by the /settings quick command.
 
@@ -293,114 +294,120 @@ def settings_dialog(
     debug_enabled: current value of the user's per-user debug toggle.
     The Debug section is only rendered when settings.debug_chat is True.
     user_prompt_instruction: current value of the user's custom prompt instructions.
+    error_message: an optional error message to display at the top of the dialog.
     """
+    sections = []
+    if error_message:
+        sections.append(
+            {"widgets": [{"textParagraph": {"text": f"<b>Error:</b> {error_message}"}}]}
+        )
+
+    sections.append(
+        {
+            "widgets": [
+                {
+                    "textParagraph": {
+                        "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
+                    }
+                }
+            ],
+        }
+    )
+    sections.append(
+        {
+            "widgets": [
+                {"textParagraph": {"text": "<b>Workspace Services</b>"}},
+                {
+                    "selectionInput": {
+                        "name": "mcp_servers",
+                        "label": "Enable access to these services",
+                        "type": "CHECK_BOX",
+                        "items": [
+                            {
+                                "text": label,
+                                "value": key,
+                                "selected": enabled_servers is None
+                                or key in enabled_servers,
+                            }
+                            for key, label in _MCP_SERVERS
+                        ],
+                    }
+                },
+            ],
+        }
+    )
+    sections.append(
+        {
+            "widgets": [
+                {"textParagraph": {"text": "<b>User Prompt Instructions</b>"}},
+                {
+                    "textInput": {
+                        "name": "user_prompt_instruction",
+                        "label": f"Custom instructions for Gemini (up to {settings.max_user_prompt_words} words)",
+                        "type": "MULTIPLE_LINE",
+                        "value": user_prompt_instruction,
+                    }
+                },
+            ],
+        }
+    )
+
+    if settings.debug_chat:
+        sections.append(
+            {
+                "widgets": [
+                    {"textParagraph": {"text": "<b>Debug</b>"}},
+                    {
+                        "selectionInput": {
+                            "name": "debug_chat",
+                            "type": "CHECK_BOX",
+                            "items": [
+                                {
+                                    "text": "Enable",
+                                    "value": "true",
+                                    "selected": debug_enabled,
+                                }
+                            ],
+                        }
+                    },
+                ],
+            }
+        )
+
+    sections.append(
+        {
+            "widgets": [
+                {
+                    "buttonList": {
+                        "buttons": [
+                            {
+                                "text": "Save",
+                                "onClick": {
+                                    "action": {
+                                        "function": f"{settings.app_base_url}/events",
+                                        "parameters": [
+                                            {
+                                                "key": "actionName",
+                                                "value": "save_settings",
+                                            }
+                                        ],
+                                    }
+                                },
+                            }
+                        ]
+                    }
+                },
+            ],
+        }
+    )
+
     return {
         "action": {
             "navigations": [
                 {
                     "pushCard": {
                         "header": {"title": "Settings"},
-                        "sections": [
-                            {
-                                "widgets": [
-                                    {
-                                        "textParagraph": {
-                                            "text": "<i>Note: saving settings resets Klip's memory of previous conversations.</i>"
-                                        }
-                                    }
-                                ],
-                            },
-                            {
-                                "widgets": [
-                                    {
-                                        "textParagraph": {
-                                            "text": "<b>Workspace Services</b>"
-                                        }
-                                    },
-                                    {
-                                        "selectionInput": {
-                                            "name": "mcp_servers",
-                                            "label": "Enable access to these services",
-                                            "type": "CHECK_BOX",
-                                            "items": [
-                                                {
-                                                    "text": label,
-                                                    "value": key,
-                                                    "selected": enabled_servers is None
-                                                    or key in enabled_servers,
-                                                }
-                                                for key, label in _MCP_SERVERS
-                                            ],
-                                        }
-                                    },
-                                ],
-                            },
-                            {
-                                "widgets": [
-                                    {
-                                        "textParagraph": {
-                                            "text": "<b>User Prompt Instructions</b>"
-                                        }
-                                    },
-                                    {
-                                        "textInput": {
-                                            "name": "user_prompt_instruction",
-                                            "label": "Custom instructions for Gemini (up to 250 words)",
-                                            "type": "MULTIPLE_LINE",
-                                            "value": user_prompt_instruction,
-                                        }
-                                    },
-                                ],
-                            },
-                            *(
-                                [
-                                    {
-                                        "widgets": [
-                                            {"textParagraph": {"text": "<b>Debug</b>"}},
-                                            {
-                                                "selectionInput": {
-                                                    "name": "debug_chat",
-                                                    "type": "CHECK_BOX",
-                                                    "items": [
-                                                        {
-                                                            "text": "Enable",
-                                                            "value": "true",
-                                                            "selected": debug_enabled,
-                                                        }
-                                                    ],
-                                                }
-                                            },
-                                        ],
-                                    }
-                                ]
-                                if settings.debug_chat
-                                else []
-                            ),
-                            {
-                                "widgets": [
-                                    {
-                                        "buttonList": {
-                                            "buttons": [
-                                                {
-                                                    "text": "Save",
-                                                    "onClick": {
-                                                        "action": {
-                                                            "function": f"{settings.app_base_url}/events",
-                                                            "parameters": [
-                                                                {
-                                                                    "key": "actionName",
-                                                                    "value": "save_settings",
-                                                                }
-                                                            ],
-                                                        }
-                                                    },
-                                                }
-                                            ]
-                                        }
-                                    },
-                                ],
-                            },
-                        ],
+                        "sections": sections,
                     }
                 }
             ]

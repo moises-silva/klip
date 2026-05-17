@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     strip_unknown_tool_params: bool = False
     # Post a debug info message in-thread after every Gemini response (developer use only).
     debug_chat: bool = False
+    # Maximum word count for user prompt instructions.
+    max_user_prompt_words: int = 250
 
 
 settings = Settings()

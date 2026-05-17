@@ -319,6 +319,7 @@ async def handle_app_command(event: dict) -> dict:
             enabled,
             debug_enabled=debug_enabled,
             user_prompt_instruction=user_prompt_instruction,
+            error_message=None,
         )
 
     logger.warning("Unhandled app command id=%s", cmd_id)
@@ -355,6 +356,24 @@ async def handle_card_clicked(event: dict) -> dict:
             .get("stringInputs", {})
             .get("value", [""])[0]
         )
+
+        # Validate user_prompt_instruction length
+        if len(user_prompt_instruction.split()) > settings.max_user_prompt_words:
+            error_message = f"User prompt instructions cannot exceed {settings.max_user_prompt_words} words."
+            logger.warning(
+                "User %s attempted to save prompt exceeding %d words: %.100s",
+                user_id,
+                settings.max_user_prompt_words,
+                user_prompt_instruction,
+            )
+            # Reopen settings dialog with error and previous values
+            return settings_dialog(
+                enabled_servers=selected,
+                debug_enabled=debug_chat,
+                user_prompt_instruction=user_prompt_instruction,
+                error_message=error_message,
+            )
+
         logger.info(
             "Dialog save_settings user=%s enabled_servers=%s debug_chat=%s user_prompt_instruction=%.100s",
             user_id,

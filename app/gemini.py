@@ -111,7 +111,7 @@ def _build_system_instruction(
     )
     if user_prompt_instruction:
         words = user_prompt_instruction.split()
-        truncated_instruction = " ".join(words[:250])
+        truncated_instruction = " ".join(words[: settings.max_user_prompt_words])
         system_instruction += (
             f"\n\nUser provided instructions:\n{truncated_instruction}"
         )
