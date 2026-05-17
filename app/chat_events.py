@@ -379,7 +379,9 @@ async def handle_card_clicked(event: dict) -> dict:
 
 
 async def handle_removed_from_space(event: dict) -> dict:
-    logger.info("REMOVED_FROM_SPACE user=%s", _user_id(event))
+    user_id = _user_id(event)
+    logger.info("REMOVED_FROM_SPACE user=%s", user_id)
+    await delete_user(user_id)
     return {}
 
 
