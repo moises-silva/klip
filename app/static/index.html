@@ -270,7 +270,9 @@
     // ── State ──
     const MAX_WORDS    = 250;
     const DAILY_LIMIT  = 50;
+    const MAX_HISTORY  = 20;
     let msgCount = parseInt(sessionStorage.getItem('klip_msgs') || '0');
+    let history  = [];   // [{role:'user'|'model', text:'...'}] — in-memory, session only
     let busy = false;
 
     // ── Boot ──
@@ -367,7 +369,7 @@
             const res  = await fetch(CHAT_URL, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ message, custom_instruction: getInstr(), fingerprint: FP, timezone: TZ }),
+                body:    JSON.stringify({ message, custom_instruction: getInstr(), fingerprint: FP, timezone: TZ, history }),
             });
             const data = await res.json();
             typing.remove();
@@ -376,6 +378,9 @@
                 addMsg('error', data.error || 'Something went wrong.');
             } else {
                 addMsg('bot', data.reply);
+                history.push({ role: 'user', text: message });
+                history.push({ role: 'model', text: data.reply });
+                if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
                 msgCount++;
                 sessionStorage.setItem('klip_msgs', msgCount);
                 updateLimit();

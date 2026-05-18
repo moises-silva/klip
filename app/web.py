@@ -101,11 +101,31 @@ def _system_prompt(custom_instruction: str = "", tz_name: str = "") -> str:
     return text
 
 
+_MAX_HISTORY_TURNS = 20
+_MAX_HISTORY_ENTRY_CHARS = 10_000
+
+
+def _build_contents(history: list[dict], message: str) -> list:
+    """Convert history turns to Gemini Content objects and append the current message."""
+    valid_roles = {"user", "model"}
+    contents = []
+    for turn in history[-_MAX_HISTORY_TURNS:]:
+        role = turn.get("role", "")
+        text = str(turn.get("text", ""))[:_MAX_HISTORY_ENTRY_CHARS]
+        if role in valid_roles and text:
+            contents.append(
+                genai_types.Content(role=role, parts=[genai_types.Part(text=text)])
+            )
+    contents.append(message)
+    return contents
+
+
 class ChatRequest(BaseModel):
     message: str
     custom_instruction: str = ""
     fingerprint: str = ""
     timezone: str = ""
+    history: list[dict] = []
 
 
 @router.get("/web", response_class=HTMLResponse)
@@ -136,7 +156,7 @@ async def web_chat(request: Request, body: ChatRequest):
         client = _get_client()
         response = await client.aio.models.generate_content(
             model=settings.gemini_model,
-            contents=message,
+            contents=_build_contents(body.history, message),
             config=genai_types.GenerateContentConfig(
                 system_instruction=_system_prompt(body.custom_instruction, tz_name),
                 tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
