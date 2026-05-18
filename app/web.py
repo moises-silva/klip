@@ -3,7 +3,8 @@
 import asyncio
 import logging
 import pathlib
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -37,10 +38,21 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def _rate_limit_check(ip: str, fingerprint: str) -> tuple[bool, str]:
+def _local_date(tz_name: str) -> str:
+    """Return today's date string in the given IANA timezone, falling back to UTC."""
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    return datetime.now(tz).date().isoformat()
+
+
+async def _rate_limit_check(
+    ip: str, fingerprint: str, tz_name: str
+) -> tuple[bool, str]:
     """Check counters and increment if under limit. Returns (is_limited, error_message)."""
     db = _get_db()
-    today = date.today().isoformat()
+    today = _local_date(tz_name)
     limit = settings.web_daily_limit
     ip_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"ip_{today}_{ip}")
     fp_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"fp_{today}_{fingerprint}")
@@ -69,8 +81,12 @@ async def _rate_limit_check(ip: str, fingerprint: str) -> tuple[bool, str]:
     return False, ""
 
 
-def _system_prompt(custom_instruction: str = "") -> str:
-    now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
+def _system_prompt(custom_instruction: str = "", tz_name: str = "") -> str:
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    now = datetime.now(tz).strftime("%A, %B %d, %Y")
     text = (
         "You are Klip, a helpful AI assistant. "
         "Be concise and helpful. "
@@ -89,6 +105,7 @@ class ChatRequest(BaseModel):
     message: str
     custom_instruction: str = ""
     fingerprint: str = ""
+    timezone: str = ""
 
 
 @router.get("/web", response_class=HTMLResponse)
@@ -109,8 +126,9 @@ async def web_chat(request: Request, body: ChatRequest):
 
     ip = _client_ip(request)
     fingerprint = body.fingerprint or "unknown"
+    tz_name = body.timezone
 
-    limited, reason = await _rate_limit_check(ip, fingerprint)
+    limited, reason = await _rate_limit_check(ip, fingerprint, tz_name)
     if limited:
         return JSONResponse({"error": reason}, status_code=429)
 
@@ -120,7 +138,7 @@ async def web_chat(request: Request, body: ChatRequest):
             model=settings.gemini_model,
             contents=message,
             config=genai_types.GenerateContentConfig(
-                system_instruction=_system_prompt(body.custom_instruction),
+                system_instruction=_system_prompt(body.custom_instruction, tz_name),
                 tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
             ),
         )

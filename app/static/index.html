@@ -237,6 +237,9 @@
         return v;
     })();
 
+    // ── Timezone ──
+    const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     // ── API URL (resolves correctly through any proxy prefix) ──
     const CHAT_URL = window.location.pathname.replace(/\/web\/?$/, '') + '/web/chat';
 
@@ -338,7 +341,7 @@
             const res  = await fetch(CHAT_URL, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ message, custom_instruction: getInstr(), fingerprint: FP }),
+                body:    JSON.stringify({ message, custom_instruction: getInstr(), fingerprint: FP, timezone: TZ }),
             });
             const data = await res.json();
             typing.remove();
