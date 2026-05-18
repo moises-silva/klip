@@ -30,11 +30,6 @@ debugger during development.
 - ADC already works via `gcloud auth application-default login`
 - Firestore connects to the real GCP instance (or Firestore emulator for full isolation)
 
-# Reset Auth Command
-
-/reset_auth slash or quick commadn to reset authorization, but not the rest of the settings (like
-the current reset command does)
-
 # Comparison Table with native 'Ask Gemini'
 
 Write a few words about how this App is different from the native 'Ask Gemini' by Google (tl;dr this
@@ -51,7 +46,6 @@ likely includes adjustments to some prompts and card titles.
 
 ## Web UI
 
-- Markdown rendering for chat responses (e.g. marked.js)
 - Streaming responses (typewriter effect)
 - Conversation history persistence across sessions
 - Mobile-optimized layout
