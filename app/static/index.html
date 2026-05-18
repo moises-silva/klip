@@ -74,7 +74,7 @@
             border-bottom: 1px solid var(--border);
             padding: 0 20px;
         }
-        .settings-panel.open { max-height: 220px; padding: 16px 20px; }
+        .settings-panel.open { max-height: 280px; padding: 16px 20px; }
 
         .settings-panel label {
             display: block;
@@ -297,6 +297,9 @@
               placeholder="E.g. Respond in Spanish. Keep answers under 3 sentences."
               oninput="onInstrInput()"></textarea>
     <div class="word-count" id="wordCount">0 / 250 words</div>
+    <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+        <button class="settings-btn" onclick="closeSettings()">Accept</button>
+    </div>
 </div>
 
 <div class="chat" id="chat"></div>
@@ -351,6 +354,10 @@
             const s = JSON.parse(raw);
             history  = Array.isArray(s.history) ? s.history : [];
             msgCount = s.date === todayStr() ? (s.msgCount || 0) : 0;
+            if (s.customInstruction) {
+                document.getElementById('customInstr').value = s.customInstruction;
+                onInstrInput();
+            }
             return history.length > 0;
         } catch { return false; }
     }
@@ -358,6 +365,7 @@
     function saveState() {
         localStorage.setItem(STATE_KEY, JSON.stringify({
             history, msgCount, date: todayStr(),
+            customInstruction: document.getElementById('customInstr').value,
         }));
     }
 
@@ -402,6 +410,12 @@
         const open  = panel.classList.toggle('open');
         btn.classList.toggle('active', open);
         if (open) document.getElementById('customInstr').focus();
+    }
+
+    function closeSettings() {
+        document.getElementById('settingsPanel').classList.remove('open');
+        document.getElementById('settingsBtn').classList.remove('active');
+        saveState();
     }
 
     function onInstrInput() {
