@@ -80,10 +80,13 @@ async def _rate_limit_check(
     limit = (
         settings.web_guest_daily_limit if is_guest else settings.web_user_daily_limit
     )
+    global_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"global_{today}")
     ip_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"ip_{today}_{ip}")
     fp_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"fp_{today}_{fingerprint}")
 
-    ip_doc, fp_doc = await asyncio.gather(ip_ref.get(), fp_ref.get())
+    global_doc, ip_doc, fp_doc = await asyncio.gather(
+        global_ref.get(), ip_ref.get(), fp_ref.get()
+    )
 
     def count_for(doc) -> int:
         if doc.exists:
@@ -95,6 +98,14 @@ async def _rate_limit_check(
         if is_guest:
             return f"{reason} Sign in with Google for a higher limit."
         return f"{reason} Try again tomorrow."
+
+    global_limit = settings.web_global_daily_limit
+    if global_limit and count_for(global_doc) >= global_limit:
+        logger.warning("Global daily web limit reached (%d)", global_limit)
+        return (
+            True,
+            "The service has reached its daily capacity. Please try again tomorrow.",
+        )
 
     if count_for(ip_doc) >= limit:
         return True, limit_msg("Daily limit reached for your network.")
@@ -108,7 +119,11 @@ async def _rate_limit_check(
         else:
             await ref.set({"date": today, "count": 1})
 
-    await asyncio.gather(increment(ip_ref, ip_doc), increment(fp_ref, fp_doc))
+    await asyncio.gather(
+        increment(global_ref, global_doc),
+        increment(ip_ref, ip_doc),
+        increment(fp_ref, fp_doc),
+    )
     return False, ""
 
 

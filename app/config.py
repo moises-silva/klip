@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     # Daily message limits for the web chat interface (per IP and per browser fingerprint).
     web_guest_daily_limit: int = 30
     web_user_daily_limit: int = 100
+    # Hard daily cap across all web users combined. 0 = disabled.
+    web_global_daily_limit: int = 1000
     # Secret key for signing web session cookies. Generate with: python -c "import secrets; print(secrets.token_hex(32))"
     web_session_secret: str = ""
     # Explicit redirect URI for web OAuth callback. Defaults to {app_base_url}/auth/web/callback.
