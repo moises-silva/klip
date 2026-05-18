@@ -332,7 +332,7 @@
     const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // ── API URL (resolves correctly through any proxy prefix) ──
-    const CHAT_URL = window.location.pathname.replace(/\/web\/?$/, '') + '/web/chat';
+    const CHAT_URL = window.location.pathname.replace(/\/web\/?$/, '').replace(/\/$/, '') + '/web/chat';
 
     // ── State ──
     const MAX_WORDS    = 250;

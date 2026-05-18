@@ -128,6 +128,7 @@ class ChatRequest(BaseModel):
     history: list[dict] = []
 
 
+@router.get("/", response_class=HTMLResponse)
 @router.get("/web", response_class=HTMLResponse)
 async def web_index():
     return HTMLResponse((_STATIC / "index.html").read_text())
