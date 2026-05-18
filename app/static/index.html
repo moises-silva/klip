@@ -49,8 +49,9 @@
         .logo span { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
         .tagline { font-size: 0.8rem; color: var(--muted); }
 
+        .header-actions { margin-left: auto; display: flex; gap: 8px; }
+
         .settings-btn {
-            margin-left: auto;
             background: transparent;
             border: 1px solid var(--border);
             color: var(--muted);
@@ -211,6 +212,55 @@
 
         .limit-note { font-size: 0.75rem; color: var(--muted); text-align: center; min-height: 1em; }
         .limit-note.warn { color: #e67e00; }
+
+        /* ── Confirmation modal ── */
+        .modal-backdrop {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.6);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-backdrop.open { display: flex; }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 360px;
+            width: 90%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .modal h2 { font-size: 1rem; font-weight: 700; }
+        .modal p  { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .modal-cancel {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: border-color .15s;
+        }
+        .modal-cancel:hover { border-color: var(--accent); }
+        .modal-confirm {
+            background: var(--err-text);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            padding: 8px 16px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: filter .15s;
+        }
+        .modal-confirm:hover { filter: brightness(1.12); }
     </style>
 </head>
 <body>
@@ -221,8 +271,22 @@
         <span>Klip</span>
     </a>
     <span class="tagline">AI assistant · web search</span>
-    <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()">⚙ Settings</button>
+    <div class="header-actions">
+        <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()">⚙ Settings</button>
+        <button class="settings-btn" onclick="askReset()">↺ Reset</button>
+    </div>
 </header>
+
+<div class="modal-backdrop" id="resetModal">
+    <div class="modal">
+        <h2>Reset conversation?</h2>
+        <p>This will delete your entire conversation history and session data from this browser. It cannot be undone.</p>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-confirm" onclick="confirmReset()">Reset</button>
+        </div>
+    </div>
+</div>
 
 <div class="settings-panel" id="settingsPanel">
     <label for="customInstr">
@@ -306,6 +370,30 @@
         chat.scrollTop = chat.scrollHeight;
     }
     updateLimit();
+
+    // ── Reset modal ──
+    function askReset() {
+        document.getElementById('resetModal').classList.add('open');
+    }
+
+    function closeModal() {
+        document.getElementById('resetModal').classList.remove('open');
+    }
+
+    function confirmReset() {
+        localStorage.removeItem(STATE_KEY);
+        history  = [];
+        msgCount = 0;
+        closeModal();
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        addMsg('model', "Hi! I'm Klip, an AI assistant with web search. Ask me anything.");
+        updateLimit();
+    }
+
+    document.getElementById('resetModal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeModal();
+    });
 
     // ── Settings ──
     function toggleSettings() {
