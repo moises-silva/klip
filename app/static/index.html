@@ -114,7 +114,7 @@
 
         .msg { display: flex; max-width: 78%; }
         .msg.user  { align-self: flex-end; }
-        .msg.bot, .msg.error { align-self: flex-start; }
+        .msg.model, .msg.error { align-self: flex-start; }
 
         .bubble {
             padding: 10px 14px;
@@ -125,28 +125,28 @@
         }
 
         .msg.user  .bubble { background: var(--user-bg); color: #e6edf3; border-bottom-right-radius: 4px; white-space: pre-wrap; }
-        .msg.bot   .bubble { background: var(--bot-bg);  color: var(--text);     border-bottom-left-radius: 4px; }
+        .msg.model .bubble { background: var(--bot-bg);  color: var(--text);     border-bottom-left-radius: 4px; }
         .msg.error .bubble { background: var(--err-bg);  color: var(--err-text); border-bottom-left-radius: 4px; white-space: pre-wrap; }
 
-        /* ── Markdown inside bot bubbles ── */
-        .msg.bot .bubble p        { margin: 0 0 .6em; }
-        .msg.bot .bubble p:last-child { margin-bottom: 0; }
-        .msg.bot .bubble ul,
-        .msg.bot .bubble ol       { margin: .4em 0 .6em 1.4em; }
-        .msg.bot .bubble li       { margin-bottom: .2em; }
-        .msg.bot .bubble h1,
-        .msg.bot .bubble h2,
-        .msg.bot .bubble h3       { font-size: 1em; font-weight: 700; margin: .7em 0 .3em; }
-        .msg.bot .bubble code     { background: #0d1117; border-radius: 4px; padding: 1px 5px; font-size: .85em; font-family: 'SFMono-Regular', Consolas, monospace; }
-        .msg.bot .bubble pre      { background: #0d1117; border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: .5em 0; }
-        .msg.bot .bubble pre code { background: none; padding: 0; font-size: .85em; }
-        .msg.bot .bubble blockquote { border-left: 3px solid var(--border); margin: .5em 0; padding-left: 12px; color: var(--muted); }
-        .msg.bot .bubble a        { color: var(--accent); text-decoration: underline; }
-        .msg.bot .bubble hr       { border: none; border-top: 1px solid var(--border); margin: .6em 0; }
-        .msg.bot .bubble table    { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .88em; }
-        .msg.bot .bubble th,
-        .msg.bot .bubble td       { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
-        .msg.bot .bubble th       { background: var(--surface); }
+        /* ── Markdown inside model bubbles ── */
+        .msg.model .bubble p        { margin: 0 0 .6em; }
+        .msg.model .bubble p:last-child { margin-bottom: 0; }
+        .msg.model .bubble ul,
+        .msg.model .bubble ol       { margin: .4em 0 .6em 1.4em; }
+        .msg.model .bubble li       { margin-bottom: .2em; }
+        .msg.model .bubble h1,
+        .msg.model .bubble h2,
+        .msg.model .bubble h3       { font-size: 1em; font-weight: 700; margin: .7em 0 .3em; }
+        .msg.model .bubble code     { background: #0d1117; border-radius: 4px; padding: 1px 5px; font-size: .85em; font-family: 'SFMono-Regular', Consolas, monospace; }
+        .msg.model .bubble pre      { background: #0d1117; border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: .5em 0; }
+        .msg.model .bubble pre code { background: none; padding: 0; font-size: .85em; }
+        .msg.model .bubble blockquote { border-left: 3px solid var(--border); margin: .5em 0; padding-left: 12px; color: var(--muted); }
+        .msg.model .bubble a        { color: var(--accent); text-decoration: underline; }
+        .msg.model .bubble hr       { border: none; border-top: 1px solid var(--border); margin: .6em 0; }
+        .msg.model .bubble table    { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .88em; }
+        .msg.model .bubble th,
+        .msg.model .bubble td       { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+        .msg.model .bubble th       { background: var(--surface); }
 
         /* typing dots */
         .dots { display: flex; gap: 5px; padding: 4px 2px; }
@@ -271,12 +271,40 @@
     const MAX_WORDS    = 250;
     const DAILY_LIMIT  = 50;
     const MAX_HISTORY  = 20;
-    let msgCount = parseInt(sessionStorage.getItem('klip_msgs') || '0');
-    let history  = [];   // [{role:'user'|'model', text:'...'}] — in-memory, session only
-    let busy = false;
+    const STATE_KEY    = 'klip_state';
+    let history  = [];
+    let msgCount = 0;
+    let busy     = false;
+
+    function todayStr() {
+        return new Date().toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD
+    }
+
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(STATE_KEY);
+            if (!raw) return false;
+            const s = JSON.parse(raw);
+            history  = Array.isArray(s.history) ? s.history : [];
+            msgCount = s.date === todayStr() ? (s.msgCount || 0) : 0;
+            return history.length > 0;
+        } catch { return false; }
+    }
+
+    function saveState() {
+        localStorage.setItem(STATE_KEY, JSON.stringify({
+            history, msgCount, date: todayStr(),
+        }));
+    }
 
     // ── Boot ──
-    addMsg('bot', "Hi! I'm Klip, an AI assistant with web search. Ask me anything.");
+    const hasHistory = loadState();
+    addMsg('model', "Hi! I'm Klip, an AI assistant with web search. Ask me anything.");
+    if (hasHistory) {
+        for (const t of history) addMsg(t.role, t.text);
+        const chat = document.getElementById('chat');
+        chat.scrollTop = chat.scrollHeight;
+    }
     updateLimit();
 
     // ── Settings ──
@@ -308,7 +336,7 @@
         bubble.className = 'bubble';
         if (role === 'typing') {
             bubble.innerHTML = '<div class="dots"><span></span><span></span><span></span></div>';
-        } else if (role === 'bot') {
+        } else if (role === 'model') {
             bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
         } else {
             bubble.textContent = text;
@@ -377,12 +405,12 @@
             if (!res.ok) {
                 addMsg('error', data.error || 'Something went wrong.');
             } else {
-                addMsg('bot', data.reply);
+                addMsg('model', data.reply);
                 history.push({ role: 'user', text: message });
                 history.push({ role: 'model', text: data.reply });
                 if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
                 msgCount++;
-                sessionStorage.setItem('klip_msgs', msgCount);
+                saveState();
                 updateLimit();
             }
         } catch {
