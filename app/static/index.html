@@ -285,6 +285,32 @@
             transition: filter .15s;
         }
         .modal-confirm:hover { filter: brightness(1.12); }
+
+        /* ── Footer ── */
+        footer {
+            flex-shrink: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 7px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+        footer a {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color .15s;
+        }
+        footer a:hover { color: var(--text); }
+        footer a img { height: 16px; width: 16px; border-radius: 50%; }
+        footer a span { color: var(--accent); font-weight: 700; }
     </style>
 </head>
 <body>
@@ -328,6 +354,14 @@
 </div>
 
 <div class="chat" id="chat"></div>
+
+<footer>
+    Powered by
+    <a href="https://github.com/moises-silva/klip/" target="_blank" rel="noopener">
+        <img src="https://storage.googleapis.com/klip-static/klip_avatar_512.gif" alt="Klip">
+        <span>Klip</span>
+    </a>
+</footer>
 
 <div class="input-wrap">
     <div class="input-row">
