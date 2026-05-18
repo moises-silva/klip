@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from .chat_events import (
     handle_added_to_space,
@@ -64,6 +65,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Klip", lifespan=lifespan)
+if settings.web_session_secret:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.web_session_secret,
+        https_only=True,
+        same_site="lax",
+    )
 app.include_router(web_router)
 
 

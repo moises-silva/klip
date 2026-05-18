@@ -274,6 +274,7 @@
     <div class="header-actions">
         <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()">⚙ Settings</button>
         <button class="settings-btn" onclick="askReset()">↺ Reset</button>
+        <a class="settings-btn" href="/logout">Sign out</a>
     </div>
 </header>
 
@@ -504,6 +505,10 @@
             const data = await res.json();
             typing.remove();
 
+            if (res.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
             if (!res.ok) {
                 addMsg('error', data.error || 'Something went wrong.');
             } else {
