@@ -49,7 +49,31 @@
         .logo span { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: -.3px; }
         .tagline { font-size: 0.8rem; color: var(--muted); }
 
-        .header-actions { margin-left: auto; display: flex; gap: 8px; }
+        .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+        .badge-guest {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: rgba(125,133,144,.1);
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+        .badge-user {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .badge-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #3fb950;
+            flex-shrink: 0;
+        }
 
         .settings-btn {
             background: transparent;
@@ -270,11 +294,11 @@
         <img src="https://storage.googleapis.com/klip-static/klip_avatar_512.gif" alt="Klip">
         <span>Klip</span>
     </a>
-    <span class="tagline">AI assistant · web search</span>
+    <span id="userBadge"></span>
     <div class="header-actions">
         <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()">⚙ Settings</button>
         <button class="settings-btn" onclick="askReset()">↺ Reset</button>
-        <a class="settings-btn" href="/logout">Sign out</a>
+        <a class="settings-btn" id="authBtn" href="/logout">Sign out</a>
     </div>
 </header>
 
@@ -335,10 +359,25 @@
     // ── API URL (resolves correctly through any proxy prefix) ──
     const CHAT_URL = window.location.pathname.replace(/\/web\/?$/, '').replace(/\/$/, '') + '/web/chat';
 
+    // ── User info ──
+    const USER = window.KLIP_USER || { guest: true, daily_limit: 30 };
+    const DAILY_LIMIT = USER.daily_limit;
+
+    (function renderUserBadge() {
+        const badge  = document.getElementById('userBadge');
+        const authBtn = document.getElementById('authBtn');
+        if (USER.guest) {
+            badge.innerHTML = '<span class="badge-guest">Guest</span>';
+            authBtn.textContent = 'Sign in';
+            authBtn.href = '/login';
+        } else {
+            badge.innerHTML = `<span class="badge-user"><span class="badge-dot"></span>${USER.email}</span>`;
+        }
+    })();
+
     // ── State ──
-    const MAX_WORDS    = 250;
-    const DAILY_LIMIT  = 50;
-    const MAX_HISTORY  = 20;
+    const MAX_WORDS   = 250;
+    const MAX_HISTORY = 20;
     const STATE_KEY    = 'klip_state';
     let history  = [];
     let msgCount = 0;

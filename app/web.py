@@ -1,8 +1,9 @@
-"""Web chat interface — Google-authenticated, rate-limited, Google Search only."""
+"""Web chat interface — Google-authenticated or guest, rate-limited, Google Search only."""
 
 import asyncio
 import base64
 import hashlib
+import json
 import logging
 import os
 import pathlib
@@ -51,6 +52,11 @@ def _session_user(request: Request) -> dict | None:
     return request.session.get("web_user")
 
 
+def _is_allowed(request: Request) -> bool:
+    """True if the user has either signed in or explicitly chosen guest mode."""
+    return "web_user" in request.session or "web_guest" in request.session
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
@@ -67,11 +73,13 @@ def _local_date(tz_name: str) -> str:
 
 
 async def _rate_limit_check(
-    ip: str, fingerprint: str, tz_name: str
+    ip: str, fingerprint: str, tz_name: str, is_guest: bool
 ) -> tuple[bool, str]:
     db = _get_db()
     today = _local_date(tz_name)
-    limit = settings.web_daily_limit
+    limit = (
+        settings.web_guest_daily_limit if is_guest else settings.web_user_daily_limit
+    )
     ip_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"ip_{today}_{ip}")
     fp_ref = db.collection(_RATE_LIMIT_COLLECTION).document(f"fp_{today}_{fingerprint}")
 
@@ -83,10 +91,15 @@ async def _rate_limit_check(
             return d.get("count", 0) if d.get("date") == today else 0
         return 0
 
+    def limit_msg(reason: str) -> str:
+        if is_guest:
+            return f"{reason} Sign in with Google for a higher limit."
+        return f"{reason} Try again tomorrow."
+
     if count_for(ip_doc) >= limit:
-        return True, "Daily message limit reached for your network. Try again tomorrow."
+        return True, limit_msg("Daily limit reached for your network.")
     if count_for(fp_doc) >= limit:
-        return True, "Daily message limit reached. Try again tomorrow."
+        return True, limit_msg("Daily message limit reached.")
 
     async def increment(ref, doc):
         d = doc.to_dict() if doc.exists else {}
@@ -149,7 +162,15 @@ class ChatRequest(BaseModel):
 
 
 @router.get("/login")
-async def web_login(request: Request):
+async def web_login_page(request: Request):
+    html = (_STATIC / "login.html").read_text()
+    html = html.replace("{{GUEST_LIMIT}}", str(settings.web_guest_daily_limit))
+    html = html.replace("{{USER_LIMIT}}", str(settings.web_user_daily_limit))
+    return HTMLResponse(html)
+
+
+@router.get("/login/google")
+async def web_login_google(request: Request):
     code_verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
     code_challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
@@ -172,6 +193,12 @@ async def web_login(request: Request):
         "prompt": "select_account",
     }
     return RedirectResponse(url=_GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params))
+
+
+@router.get("/guest")
+async def web_guest(request: Request):
+    request.session["web_guest"] = True
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.get("/auth/web/callback")
@@ -224,6 +251,7 @@ async def web_auth_callback(
         logger.warning("Web login denied for %s", email)
         raise HTTPException(status_code=403, detail=f"Access denied for {email}.")
 
+    request.session.pop("web_guest", None)
     request.session["web_user"] = {"email": email, "name": userinfo.get("name", "")}
     logger.info("Web login: %s", email)
     return RedirectResponse(url="/", status_code=302)
@@ -241,14 +269,32 @@ async def web_logout(request: Request):
 @router.get("/", response_class=HTMLResponse)
 @router.get("/web", response_class=HTMLResponse)
 async def web_index(request: Request):
-    if not _session_user(request):
+    if not _is_allowed(request):
         return RedirectResponse(url="/login", status_code=302)
-    return HTMLResponse((_STATIC / "index.html").read_text())
+
+    user_data = _session_user(request)
+    klip_user = {
+        "guest": user_data is None,
+        "email": user_data.get("email", "") if user_data else "",
+        "name": user_data.get("name", "") if user_data else "",
+        "daily_limit": (
+            settings.web_guest_daily_limit
+            if user_data is None
+            else settings.web_user_daily_limit
+        ),
+    }
+    html = (_STATIC / "index.html").read_text()
+    html = html.replace(
+        "</head>",
+        f"<script>window.KLIP_USER={json.dumps(klip_user)};</script></head>",
+        1,
+    )
+    return HTMLResponse(html)
 
 
 @router.post("/web/chat")
 async def web_chat(request: Request, body: ChatRequest):
-    if not _session_user(request):
+    if not _is_allowed(request):
         return JSONResponse({"error": "Not authenticated."}, status_code=401)
 
     message = body.message.strip()
@@ -263,8 +309,9 @@ async def web_chat(request: Request, body: ChatRequest):
     ip = _client_ip(request)
     fingerprint = body.fingerprint or "unknown"
     tz_name = body.timezone
+    is_guest = _session_user(request) is None
 
-    limited, reason = await _rate_limit_check(ip, fingerprint, tz_name)
+    limited, reason = await _rate_limit_check(ip, fingerprint, tz_name, is_guest)
     if limited:
         return JSONResponse({"error": reason}, status_code=429)
 

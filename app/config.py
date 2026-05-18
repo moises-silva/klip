@@ -43,8 +43,9 @@ class Settings(BaseSettings):
     max_user_prompt_words: int = 250
     # Enable the web chat interface at /web. Disabled by default.
     web_enabled: bool = False
-    # Daily message limit for the web chat interface (per IP and per browser fingerprint).
-    web_daily_limit: int = 50
+    # Daily message limits for the web chat interface (per IP and per browser fingerprint).
+    web_guest_daily_limit: int = 30
+    web_user_daily_limit: int = 100
     # Secret key for signing web session cookies. Generate with: python -c "import secrets; print(secrets.token_hex(32))"
     web_session_secret: str = ""
     # Explicit redirect URI for web OAuth callback. Defaults to {app_base_url}/auth/web/callback.
