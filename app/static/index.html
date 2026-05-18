@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Klip</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -119,13 +121,32 @@
             border-radius: 18px;
             font-size: 0.93rem;
             line-height: 1.55;
-            white-space: pre-wrap;
             word-break: break-word;
         }
 
-        .msg.user  .bubble { background: var(--user-bg); color: #e6edf3; border-bottom-right-radius: 4px; }
+        .msg.user  .bubble { background: var(--user-bg); color: #e6edf3; border-bottom-right-radius: 4px; white-space: pre-wrap; }
         .msg.bot   .bubble { background: var(--bot-bg);  color: var(--text);     border-bottom-left-radius: 4px; }
-        .msg.error .bubble { background: var(--err-bg);  color: var(--err-text); border-bottom-left-radius: 4px; }
+        .msg.error .bubble { background: var(--err-bg);  color: var(--err-text); border-bottom-left-radius: 4px; white-space: pre-wrap; }
+
+        /* ── Markdown inside bot bubbles ── */
+        .msg.bot .bubble p        { margin: 0 0 .6em; }
+        .msg.bot .bubble p:last-child { margin-bottom: 0; }
+        .msg.bot .bubble ul,
+        .msg.bot .bubble ol       { margin: .4em 0 .6em 1.4em; }
+        .msg.bot .bubble li       { margin-bottom: .2em; }
+        .msg.bot .bubble h1,
+        .msg.bot .bubble h2,
+        .msg.bot .bubble h3       { font-size: 1em; font-weight: 700; margin: .7em 0 .3em; }
+        .msg.bot .bubble code     { background: #0d1117; border-radius: 4px; padding: 1px 5px; font-size: .85em; font-family: 'SFMono-Regular', Consolas, monospace; }
+        .msg.bot .bubble pre      { background: #0d1117; border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: .5em 0; }
+        .msg.bot .bubble pre code { background: none; padding: 0; font-size: .85em; }
+        .msg.bot .bubble blockquote { border-left: 3px solid var(--border); margin: .5em 0; padding-left: 12px; color: var(--muted); }
+        .msg.bot .bubble a        { color: var(--accent); text-decoration: underline; }
+        .msg.bot .bubble hr       { border: none; border-top: 1px solid var(--border); margin: .6em 0; }
+        .msg.bot .bubble table    { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .88em; }
+        .msg.bot .bubble th,
+        .msg.bot .bubble td       { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+        .msg.bot .bubble th       { background: var(--surface); }
 
         /* typing dots */
         .dots { display: flex; gap: 5px; padding: 4px 2px; }
@@ -229,6 +250,9 @@
 </div>
 
 <script>
+    // ── Markdown ──
+    marked.use({ breaks: true, gfm: true });
+
     // ── Fingerprint ──
     const FP = (() => {
         const k = 'klip_fp';
@@ -282,6 +306,8 @@
         bubble.className = 'bubble';
         if (role === 'typing') {
             bubble.innerHTML = '<div class="dots"><span></span><span></span><span></span></div>';
+        } else if (role === 'bot') {
+            bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
         } else {
             bubble.textContent = text;
         }
