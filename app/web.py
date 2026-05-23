@@ -8,7 +8,7 @@ import logging
 import os
 import pathlib
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -117,7 +117,8 @@ async def _rate_limit_check(
         if d.get("date") == today:
             await ref.update({"count": firestore.Increment(1)})
         else:
-            await ref.set({"date": today, "count": 1})
+            expires_at = datetime.now(timezone.utc) + timedelta(days=2)
+            await ref.set({"date": today, "count": 1, "expires_at": expires_at})
 
     await asyncio.gather(
         increment(global_ref, global_doc),
