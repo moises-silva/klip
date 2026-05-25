@@ -1,0 +1,35 @@
+[Unit]
+Description=Klip — Gemini-powered Google Workspace Chat App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=klip
+Group=klip
+
+# Adjust to wherever the repo is checked out under the klip account.
+WorkingDirectory=/home/klip/klip
+
+# Load all settings from the .env file.
+EnvironmentFile=/home/klip/klip/.env
+
+# ADC credentials for Vertex AI (Gemini).
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/klip/klip/klip-sa-key.json
+
+ExecStart=/home/klip/klip/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 9000 \
+    --workers 2
+
+# Restart automatically on crashes; wait 5 s before retrying.
+Restart=on-failure
+RestartSec=5
+
+# Route all stdout/stderr to the journal (journalctl -u klip).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=klip
+
+[Install]
+WantedBy=multi-user.target
