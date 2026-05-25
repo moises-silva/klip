@@ -32,6 +32,7 @@ from .chat_api import create_message, update_message
 from .formatting import md_to_chat
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
+from .mcp_client import SERVER_BY_NAME, multi_mcp_session, workspace_mcp_session
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +241,69 @@ _COMMAND_FORGET_HISTORY = 1
 _COMMAND_RESET = 2
 _COMMAND_SETTINGS = 3
 _COMMAND_RESET_OAUTH = 4
+_COMMAND_MCP = 5
+
+
+def _app_command_args(event: dict) -> str:
+    """Returns text typed after the slash command name (the argument text)."""
+    return (
+        _chat(event)
+        .get("appCommandPayload", {})
+        .get("message", {})
+        .get("argumentText", "")
+        .strip()
+    )
+
+
+async def _run_mcp_list(
+    args: str, access_token: str, space: str, message_name: str | None
+) -> None:
+    """List MCP tools for one server (args="chat") or all servers (args="")."""
+    try:
+        if args:
+            server_name = args.lower()
+            url = SERVER_BY_NAME.get(server_name)
+            if not url:
+                available = ", ".join(sorted(SERVER_BY_NAME))
+                result = f"Unknown MCP server *{server_name}*. Available: {available}"
+            else:
+                async with workspace_mcp_session(access_token, url=url) as session:
+                    listing = await session.list_tools()
+                lines = [f"*{server_name}* — {len(listing.tools)} tools\n"]
+                for t in listing.tools:
+                    desc = t.description or "(no description)"
+                    lines.append(f"• `{t.name}` — {desc}")
+                result = "\n".join(lines)
+        else:
+            async with multi_mcp_session(access_token) as (_, all_tools):
+                by_server: dict[str, list] = {}
+                for t in all_tools:
+                    prefix = t.name.split("_", 1)[0]
+                    by_server.setdefault(prefix, []).append(t)
+                lines = ["*MCP Servers*\n"]
+                for server in sorted(by_server):
+                    tools = by_server[server]
+                    lines.append(f"*{server}* ({len(tools)} tools)")
+                    for t in tools:
+                        desc = t.description or "(no description)"
+                        lines.append(f"  • `{t.name}` — {desc}")
+                    lines.append("")
+                result = "\n".join(lines).strip()
+    except Exception as exc:
+        logger.error("MCP list failed: %s", exc, exc_info=True)
+        result = f"Failed to list MCP tools: {exc}"
+
+    body = {"text": md_to_chat(result), "cardsV2": []}
+    if message_name:
+        try:
+            await update_message(message_name, body, "text,cardsV2")
+            return
+        except Exception as exc:
+            logger.error("Failed to update MCP result: %s", exc)
+    try:
+        await create_message(space, body)
+    except Exception as exc:
+        logger.error("Failed to post MCP result to space=%s: %s", space, exc)
 
 
 async def handle_message(event: dict) -> dict:
@@ -328,6 +392,23 @@ async def handle_app_command(event: dict) -> dict:
         await reset_oauth(user_id)
         auth_url = await get_auth_url(user_id)
         return welcome_card(auth_url)
+
+    if cmd_id == _COMMAND_MCP:
+        args = _app_command_args(event)
+        access_token = await get_fresh_access_token(user_id)
+        if not access_token:
+            auth_url = await get_auth_url(user_id)
+            return welcome_card(auth_url)
+        space = _space_name(event)
+        message_name = None
+        try:
+            message_name, _ = await create_message(
+                space, {"text": "Listing MCP tools…", "cardsV2": []}
+            )
+        except Exception as exc:
+            logger.error("Failed to create MCP placeholder: %s", exc)
+        asyncio.create_task(_run_mcp_list(args, access_token, space, message_name))
+        return {}
 
     logger.warning("Unhandled app command id=%s", cmd_id)
     return {}

@@ -45,6 +45,9 @@ _SERVER_PREFIX = {
     DRIVE_MCP_URL: "drive",
 }
 
+# Reverse map: prefix name → URL (e.g. "chat" → CHAT_MCP_URL)
+SERVER_BY_NAME: dict[str, str] = {v: k for k, v in _SERVER_PREFIX.items()}
+
 
 @dataclass
 class BoundTool:
