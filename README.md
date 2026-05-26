@@ -2,9 +2,12 @@
 
 Klip is an open-source Google Chat App that acts as a personal Workspace assistant powered by
 Gemini. Users interact with it via Google Chat DMs. It reads and searches their Workspace data
-through the Google Chat MCP server and responds using a Gemini model running on Vertex AI.
+through the Google Workspace MCP servers and responds using a Gemini model running on Vertex AI.
 
 Klip is designed to be self-hosted by a company or individual on their own GCP infrastructure.
+
+It also offers an optional test web interface independent from Google Chat (without Workspace tool
+support).
 
 ## Demo
 
@@ -12,7 +15,7 @@ Klip is designed to be self-hosted by a company or individual on their own GCP i
 
 ## How it works
 
-1. User sends a message to the Klip bot in Google Chat
+1. User sends a message to the Klip App in Google Chat
 1. Google delivers the event to Klip's HTTP endpoint
 1. Klip fetches the user's OAuth token from Firestore and connects to the Google Chat MCP server on
    their behalf
@@ -224,6 +227,57 @@ Watch live logs from Apache and the app:
 
 ```bash
 sudo tail -f /var/log/apache2/error.log /var/log/apache2/access.log
+```
+
+### 9. Run as a systemd service (optional)
+
+For a production-like setup on the VPS, run Klip as a systemd service under a dedicated unprivileged
+user instead of a foreground process.
+
+**Create the `klip` system user:**
+
+```bash
+sudo useradd --system --create-home --home-dir /home/klip --shell /usr/sbin/nologin klip
+```
+
+**Create the venv for the `klip` user** (use the same Python version as your dev environment):
+
+```bash
+sudo python3 -m venv --copies /home/klip/klip/.venv
+sudo chown -R klip:klip /home/klip/klip/.venv
+```
+
+**Copy `.env` and the service account key** to the deployment directory and restrict permissions:
+
+```bash
+sudo cp .env klip-sa-key.json /home/klip/klip/
+sudo chown klip:klip /home/klip/klip/.env /home/klip/klip/klip-sa-key.json
+sudo chmod 600 /home/klip/klip/.env /home/klip/klip/klip-sa-key.json
+```
+
+**Install the systemd unit:**
+
+```bash
+sudo cp conf/systemd/klip.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable klip
+```
+
+**Deploy and start:**
+
+```bash
+bash local-deploy.sh       # syncs code, installs deps, restarts the service
+sudo systemctl status klip
+```
+
+**Manage the service:**
+
+```bash
+sudo systemctl start klip
+sudo systemctl stop klip
+sudo systemctl restart klip
+journalctl -u klip -f          # follow live logs
+journalctl -u klip --since today
 ```
 
 ______________________________________________________________________
