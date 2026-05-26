@@ -3,7 +3,7 @@ export
 
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
-.PHONY: deploy setup run dev fmt lint fix test
+.PHONY: deploy setup run dev fmt lint fix mdfmt test
 
 dev:
 	pip install -r requirements-dev.txt
@@ -17,6 +17,9 @@ lint:
 
 fix:
 	ruff check --fix app tests
+
+mdfmt:
+	git ls-files '*.md' | xargs mdformat --wrap 100
 
 test:
 	pytest tests/ -v
