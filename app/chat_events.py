@@ -32,7 +32,7 @@ from .chat_api import create_message, update_message
 from .formatting import md_to_chat
 from .config import settings
 from .gemini import GeminiAgent, InsufficientScopesError
-from .mcp_client import SERVER_BY_NAME, multi_mcp_session, workspace_mcp_session
+from .mcp_client import SERVER_BY_NAME, workspace_mcp_session
 
 logger = logging.getLogger(__name__)
 
@@ -255,55 +255,82 @@ def _app_command_args(event: dict) -> str:
     )
 
 
-async def _run_mcp_list(
-    args: str, access_token: str, space: str, message_name: str | None
-) -> None:
-    """List MCP tools for one server (args="chat") or all servers (args="")."""
-    try:
-        if args:
-            server_name = args.lower()
-            url = SERVER_BY_NAME.get(server_name)
-            if not url:
-                available = ", ".join(sorted(SERVER_BY_NAME))
-                result = f"Unknown MCP server *{server_name}*. Available: {available}"
-            else:
-                async with workspace_mcp_session(access_token, url=url) as session:
-                    listing = await session.list_tools()
-                lines = [f"*{server_name}* — {len(listing.tools)} tools\n"]
-                for t in listing.tools:
-                    desc = t.description or "(no description)"
-                    lines.append(f"• `{t.name}` — {desc}")
-                result = "\n".join(lines)
-        else:
-            async with multi_mcp_session(access_token) as (_, all_tools):
-                by_server: dict[str, list] = {}
-                for t in all_tools:
-                    prefix = t.name.split("_", 1)[0]
-                    by_server.setdefault(prefix, []).append(t)
-                lines = ["*MCP Servers*\n"]
-                for server in sorted(by_server):
-                    tools = by_server[server]
-                    lines.append(f"*{server}* ({len(tools)} tools)")
-                    for t in tools:
-                        desc = t.description or "(no description)"
-                        lines.append(f"  • `{t.name}` — {desc}")
-                    lines.append("")
-                result = "\n".join(lines).strip()
-    except Exception as exc:
-        logger.error("MCP list failed: %s", exc, exc_info=True)
-        result = f"Failed to list MCP tools: {exc}"
+_MCP_HELP = (
+    "*Available subcommands:*\n\n"
+    "• `/mcp list` — Configured servers and their URLs\n"
+    "• `/mcp list <server>` — Tools for a server (name + one-line summary)\n"
+    "• `/mcp schema <server>` — Full input schema for every tool on a server\n"
+    "• `/mcp help <tool_name>` — Schema and example call for a specific tool\n"
+    "• `/mcp call <tool_name> [json_args]` — Invoke a tool directly"
+)
 
+
+async def _mcp_post(result: str, space: str, message_name: str | None) -> None:
     body = {"text": md_to_chat(result), "cardsV2": []}
     if message_name:
         try:
             await update_message(message_name, body, "text,cardsV2")
             return
         except Exception as exc:
-            logger.error("Failed to update MCP result: %s", exc)
+            logger.error("Failed to update MCP message: %s", exc)
     try:
         await create_message(space, body)
     except Exception as exc:
-        logger.error("Failed to post MCP result to space=%s: %s", space, exc)
+        logger.error("Failed to post MCP message to space=%s: %s", space, exc)
+
+
+async def _run_mcp_list_tools(
+    server_name: str, access_token: str, space: str, message_name: str | None
+) -> None:
+    """List tools for one server — tool name + first sentence of description."""
+    try:
+        url = SERVER_BY_NAME.get(server_name)
+        if not url:
+            available = ", ".join(sorted(SERVER_BY_NAME))
+            result = f"Unknown server `{server_name}`. Available: {available}"
+        else:
+            async with workspace_mcp_session(access_token, url=url) as session:
+                listing = await session.list_tools()
+            lines = [f"*{server_name}* — {len(listing.tools)} tools\n"]
+            for t in listing.tools:
+                desc = t.description or ""
+                dot = desc.find(".")
+                summary = desc[: dot + 1] if dot != -1 else desc
+                lines.append(f"• `{t.name}` — {summary}")
+            result = "\n".join(lines)
+    except Exception as exc:
+        logger.error(
+            "MCP list tools failed server=%s: %s", server_name, exc, exc_info=True
+        )
+        result = f"Failed to list tools: {exc}"
+    await _mcp_post(result, space, message_name)
+
+
+async def _run_mcp_schema(
+    server_name: str, access_token: str, space: str, message_name: str | None
+) -> None:
+    """Print full input schema for every tool on a server."""
+    try:
+        url = SERVER_BY_NAME.get(server_name)
+        if not url:
+            available = ", ".join(sorted(SERVER_BY_NAME))
+            result = f"Unknown server `{server_name}`. Available: {available}"
+        else:
+            async with workspace_mcp_session(access_token, url=url) as session:
+                listing = await session.list_tools()
+            lines = [f"*{server_name}* — {len(listing.tools)} tools\n"]
+            for t in listing.tools:
+                schema_str = json.dumps(
+                    t.inputSchema or {}, indent=2, ensure_ascii=False
+                )
+                lines.append(
+                    f"*`{t.name}`*\n{t.description or ''}\n```\n{schema_str}\n```\n"
+                )
+            result = "\n".join(lines).strip()
+    except Exception as exc:
+        logger.error("MCP schema failed server=%s: %s", server_name, exc, exc_info=True)
+        result = f"Failed to fetch schema: {exc}"
+    await _mcp_post(result, space, message_name)
 
 
 def _schema_example(schema: dict, depth: int = 3) -> object:
@@ -371,17 +398,7 @@ async def _run_mcp_help(
         logger.error("MCP help failed tool=%s: %s", tool_name, exc, exc_info=True)
         result = f"Failed to fetch tool info: {exc}"
 
-    body = {"text": md_to_chat(result), "cardsV2": []}
-    if message_name:
-        try:
-            await update_message(message_name, body, "text,cardsV2")
-            return
-        except Exception as exc:
-            logger.error("Failed to update MCP help result: %s", exc)
-    try:
-        await create_message(space, body)
-    except Exception as exc:
-        logger.error("Failed to post MCP help result to space=%s: %s", space, exc)
+    await _mcp_post(result, space, message_name)
 
 
 async def _run_mcp_call(
@@ -422,17 +439,7 @@ async def _run_mcp_call(
         logger.error("MCP call failed tool=%s: %s", tool_name, exc, exc_info=True)
         result = f"Tool call failed: {exc}"
 
-    body = {"text": md_to_chat(result), "cardsV2": []}
-    if message_name:
-        try:
-            await update_message(message_name, body, "text,cardsV2")
-            return
-        except Exception as exc:
-            logger.error("Failed to update MCP call result: %s", exc)
-    try:
-        await create_message(space, body)
-    except Exception as exc:
-        logger.error("Failed to post MCP call result to space=%s: %s", space, exc)
+    await _mcp_post(result, space, message_name)
 
 
 async def handle_message(event: dict) -> dict:
@@ -524,6 +531,19 @@ async def handle_app_command(event: dict) -> dict:
 
     if cmd_id == _COMMAND_MCP:
         args = _app_command_args(event)
+        tokens = args.split(None, 2)
+        subcommand = tokens[0].lower() if tokens else ""
+
+        # Static responses — no MCP call needed.
+        if not subcommand:
+            return text_response(_MCP_HELP)
+        if subcommand == "list" and len(tokens) == 1:
+            lines = ["*MCP Servers*\n"]
+            for name, url in sorted(SERVER_BY_NAME.items()):
+                lines.append(f"• *{name}* — {url}")
+            return text_response("\n".join(lines))
+
+        # Everything below requires an access token.
         access_token = await get_fresh_access_token(user_id)
         if not access_token:
             auth_url = await get_auth_url(user_id)
@@ -531,10 +551,33 @@ async def handle_app_command(event: dict) -> dict:
         space = _space_name(event)
         message_name = None
 
-        tokens = args.split(None, 2)
-        subcommand = tokens[0].lower() if tokens else ""
-
-        if subcommand == "call":
+        if subcommand == "list":
+            server_name = tokens[1].lower()
+            try:
+                message_name, _ = await create_message(
+                    space,
+                    {"text": f"Listing tools for `{server_name}`…", "cardsV2": []},
+                )
+            except Exception as exc:
+                logger.error("Failed to create MCP list placeholder: %s", exc)
+            asyncio.create_task(
+                _run_mcp_list_tools(server_name, access_token, space, message_name)
+            )
+        elif subcommand == "schema":
+            server_name = tokens[1].lower() if len(tokens) > 1 else ""
+            if not server_name:
+                return text_response("Usage: `/mcp schema <server>`")
+            try:
+                message_name, _ = await create_message(
+                    space,
+                    {"text": f"Fetching schema for `{server_name}`…", "cardsV2": []},
+                )
+            except Exception as exc:
+                logger.error("Failed to create MCP schema placeholder: %s", exc)
+            asyncio.create_task(
+                _run_mcp_schema(server_name, access_token, space, message_name)
+            )
+        elif subcommand == "call":
             parts = tokens[1:]
             tool_name = parts[0] if parts else ""
             if not tool_name:
@@ -559,8 +602,7 @@ async def handle_app_command(event: dict) -> dict:
                 return text_response("Usage: `/mcp help <tool_name>`")
             try:
                 message_name, _ = await create_message(
-                    space,
-                    {"text": f"Fetching schema for `{tool_name}`…", "cardsV2": []},
+                    space, {"text": f"Fetching help for `{tool_name}`…", "cardsV2": []}
                 )
             except Exception as exc:
                 logger.error("Failed to create MCP help placeholder: %s", exc)
@@ -568,13 +610,7 @@ async def handle_app_command(event: dict) -> dict:
                 _run_mcp_help(tool_name, access_token, space, message_name)
             )
         else:
-            try:
-                message_name, _ = await create_message(
-                    space, {"text": "Listing MCP tools…", "cardsV2": []}
-                )
-            except Exception as exc:
-                logger.error("Failed to create MCP placeholder: %s", exc)
-            asyncio.create_task(_run_mcp_list(args, access_token, space, message_name))
+            return text_response(f"Unknown subcommand `{subcommand}`.\n\n{_MCP_HELP}")
 
         return {}
 
