@@ -12,7 +12,11 @@ echo "ruff format ..."
 "$RUFF" format app tests
 git diff --cached --name-only --diff-filter=ACM | grep '\.py$' | xargs -r git add
 echo "ruff check ..."
-"$RUFF" check app tests
+if ! "$RUFF" check app tests; then
+    echo ""
+    echo "  Tip: run 'make fix' to auto-fix lint errors, then re-stage and commit."
+    exit 1
+fi
 
 # --- mdformat: reformat staged Markdown ---
 STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' || true)
