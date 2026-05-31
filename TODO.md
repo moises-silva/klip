@@ -48,11 +48,8 @@ likely includes adjustments to some prompts and card titles.
 
 - Streaming responses (typewriter effect)
 - Conversation history persistence across sessions
-- Mobile-optimized layout
 
 # Bugs
-
-- Only request the oauth scopes needed based on the services enabled in the App settings
 
 - It seems a prompt like "What is the latest email I have received?" causes two types of
   misbehavior.
